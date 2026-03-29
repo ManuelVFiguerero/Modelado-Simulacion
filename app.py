@@ -113,7 +113,11 @@ def mostrar_menu() -> None:
 def main() -> None:
     while True:
         mostrar_menu()
-        opcion = input("Selecciona una opcion: ").strip()
+        try:
+            opcion = input("Selecciona una opcion: ").strip()
+        except EOFError:
+            print("\nEntrada finalizada. Saliendo del simulador.")
+            break
 
         if opcion == "1":
             ejecutar_lagrange()
