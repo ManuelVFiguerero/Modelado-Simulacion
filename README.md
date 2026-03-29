@@ -35,6 +35,23 @@ Desde la raiz del proyecto:
 python3 app.py
 ```
 
+## Version web interactiva (con graficos)
+
+Tambien podes usar una interfaz web con graficos interactivos (HTML) usando Streamlit + Plotly:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+python -m streamlit run web_app.py
+```
+
+La web incluye:
+- graficos de convergencia por iteracion (Biseccion, Punto Fijo, Newton, Aitken),
+- curva de la funcion en intervalos configurables,
+- interpolacion de Lagrange con nodos + curva interpolante,
+- trayectoria RK4 y modelo logistico.
+
 ## Interfaz web interactiva (Streamlit)
 
 Tambien podes usar una interfaz web con formularios, tablas y seleccion de ejercicios:

@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import asdict
 from typing import List, Tuple
 
+import plotly.graph_objects as go
 import streamlit as st
 
 from modelos import (
@@ -17,6 +18,36 @@ from modelos import (
     newton_raphson,
     runge_kutta_4,
 )
+
+
+def _eval_expr_points(expr: str, xs: List[float]) -> List[float]:
+    """Evalua expresiones con la misma whitelist usada por modelos.py."""
+    ys: List[float] = []
+    safe_math = {
+        "sin": __import__("math").sin,
+        "cos": __import__("math").cos,
+        "tan": __import__("math").tan,
+        "asin": __import__("math").asin,
+        "acos": __import__("math").acos,
+        "atan": __import__("math").atan,
+        "exp": __import__("math").exp,
+        "log": __import__("math").log,
+        "log10": __import__("math").log10,
+        "sqrt": __import__("math").sqrt,
+        "fabs": __import__("math").fabs,
+        "sinh": __import__("math").sinh,
+        "cosh": __import__("math").cosh,
+        "tanh": __import__("math").tanh,
+        "floor": __import__("math").floor,
+        "ceil": __import__("math").ceil,
+        "pi": __import__("math").pi,
+        "e": __import__("math").e,
+        "abs": abs,
+        "pow": pow,
+    }
+    for x in xs:
+        ys.append(float(eval(expr, {"__builtins__": {}}, {**safe_math, "x": x})))
+    return ys
 
 
 def _parsear_puntos(raw: str) -> List[Tuple[float, float]]:
@@ -78,7 +109,42 @@ def _panel_biseccion() -> None:
             f"Aprox raiz: {resultado.aproximacion:.10f} | convergio={resultado.convergio}"
         )
         if resultado.pasos:
-            st.dataframe([asdict(p) for p in resultado.pasos], use_container_width=True)
+            tabla = [asdict(p) for p in resultado.pasos]
+            st.dataframe(tabla, use_container_width=True)
+
+            fig_conv = go.Figure()
+            fig_conv.add_trace(
+                go.Scatter(
+                    x=[fila["iteracion"] for fila in tabla],
+                    y=[fila["error_intervalo"] for fila in tabla],
+                    mode="lines+markers",
+                    name="error_intervalo",
+                )
+            )
+            fig_conv.update_layout(
+                title="Convergencia de Biseccion",
+                xaxis_title="Iteracion",
+                yaxis_title="Error de intervalo",
+            )
+            st.plotly_chart(fig_conv, use_container_width=True)
+
+            try:
+                xs = [a + (b - a) * i / 200 for i in range(201)]
+                ys = _eval_expr_points(f_expr, xs)
+                fig_fx = go.Figure()
+                fig_fx.add_trace(
+                    go.Scatter(x=xs, y=ys, mode="lines", name="f(x)")
+                )
+                fig_fx.add_hline(y=0, line_dash="dash")
+                fig_fx.add_vline(x=resultado.aproximacion, line_dash="dot")
+                fig_fx.update_layout(
+                    title="Funcion y raiz aproximada",
+                    xaxis_title="x",
+                    yaxis_title="f(x)",
+                )
+                st.plotly_chart(fig_fx, use_container_width=True)
+            except Exception:
+                st.info("No se pudo graficar f(x) en el intervalo elegido.")
 
 
 def _panel_punto_fijo() -> None:
@@ -104,7 +170,24 @@ def _panel_punto_fijo() -> None:
         st.success(
             f"Aprox raiz: {resultado.aproximacion:.10f} | convergio={resultado.convergio}"
         )
-        st.dataframe([asdict(p) for p in resultado.pasos], use_container_width=True)
+        tabla = [asdict(p) for p in resultado.pasos]
+        st.dataframe(tabla, use_container_width=True)
+
+        fig_err = go.Figure()
+        fig_err.add_trace(
+            go.Scatter(
+                x=[fila["iteracion"] for fila in tabla],
+                y=[fila["error"] for fila in tabla],
+                mode="lines+markers",
+                name="error",
+            )
+        )
+        fig_err.update_layout(
+            title="Convergencia de Punto Fijo",
+            xaxis_title="Iteracion",
+            yaxis_title="|x_n+1 - x_n|",
+        )
+        st.plotly_chart(fig_err, use_container_width=True)
 
 
 def _panel_newton() -> None:
@@ -133,7 +216,24 @@ def _panel_newton() -> None:
         st.success(
             f"Aprox raiz: {resultado.aproximacion:.10f} | convergio={resultado.convergio}"
         )
-        st.dataframe([asdict(p) for p in resultado.pasos], use_container_width=True)
+        tabla = [asdict(p) for p in resultado.pasos]
+        st.dataframe(tabla, use_container_width=True)
+
+        fig_err = go.Figure()
+        fig_err.add_trace(
+            go.Scatter(
+                x=[fila["iteracion"] for fila in tabla],
+                y=[fila["error"] for fila in tabla],
+                mode="lines+markers",
+                name="error",
+            )
+        )
+        fig_err.update_layout(
+            title="Convergencia de Newton-Raphson",
+            xaxis_title="Iteracion",
+            yaxis_title="Error",
+        )
+        st.plotly_chart(fig_err, use_container_width=True)
 
 
 def _panel_lagrange() -> None:
@@ -153,6 +253,35 @@ def _panel_lagrange() -> None:
             return
         st.success(f"P({x_eval}) = {valor}")
 
+        xs_datos = [p[0] for p in puntos]
+        x_min, x_max = min(xs_datos), max(xs_datos)
+        margen = (x_max - x_min) * 0.2 if x_max > x_min else 1.0
+        xs = [x_min - margen + (x_max - x_min + 2 * margen) * i / 200 for i in range(201)]
+        ys = [interpolacion_lagrange(puntos, x) for x in xs]
+
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=xs, y=ys, mode="lines", name="Polinomio"))
+        fig.add_trace(
+            go.Scatter(
+                x=xs_datos,
+                y=[p[1] for p in puntos],
+                mode="markers",
+                name="Nodos",
+                marker=dict(size=10),
+            )
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=[x_eval],
+                y=[valor],
+                mode="markers",
+                name="Punto evaluado",
+                marker=dict(size=11, symbol="diamond"),
+            )
+        )
+        fig.update_layout(title="Interpolacion de Lagrange", xaxis_title="x", yaxis_title="y")
+        st.plotly_chart(fig, use_container_width=True)
+
 
 def _panel_diferencia_central() -> None:
     st.subheader("Derivacion Numerica (Diferencia Central)")
@@ -170,6 +299,17 @@ def _panel_diferencia_central() -> None:
             st.error(str(exc))
             return
         st.success(f"f'({x}) ≈ {derivada}")
+
+        try:
+            xs = [x - 5 * float(h) + i * float(h) for i in range(11)]
+            ys = _eval_expr_points(f_expr, xs)
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=xs, y=ys, mode="lines+markers", name="f(x)"))
+            fig.add_vline(x=x, line_dash="dash")
+            fig.update_layout(title="Vecindad de f(x) para derivacion", xaxis_title="x", yaxis_title="f(x)")
+            st.plotly_chart(fig, use_container_width=True)
+        except Exception:
+            st.info("No se pudo graficar la funcion para esta expresion.")
 
 
 def _panel_aitken() -> None:
@@ -214,7 +354,24 @@ def _panel_aitken() -> None:
                 f"Aprox Aitken: {resultado.aproximacion:.10f} "
                 f"| convergio={resultado.convergio}"
             )
-            st.dataframe([asdict(p) for p in resultado.pasos], use_container_width=True)
+            tabla = [asdict(p) for p in resultado.pasos]
+            st.dataframe(tabla, use_container_width=True)
+
+            fig = go.Figure()
+            fig.add_trace(
+                go.Scatter(
+                    x=[fila["iteracion"] for fila in tabla],
+                    y=[fila["error"] for fila in tabla],
+                    mode="lines+markers",
+                    name="error Aitken",
+                )
+            )
+            fig.update_layout(
+                title="Convergencia de Aitken",
+                xaxis_title="Iteracion",
+                yaxis_title="Error",
+            )
+            st.plotly_chart(fig, use_container_width=True)
 
 
 def _panel_rk4() -> None:
@@ -236,7 +393,18 @@ def _panel_rk4() -> None:
             return
         tabla = [asdict(p) for p in trayectoria]
         st.dataframe(tabla, use_container_width=True)
-        st.line_chart({"y": [p["y"] for p in tabla]}, use_container_width=True)
+
+        fig = go.Figure()
+        fig.add_trace(
+            go.Scatter(
+                x=[p["t"] for p in tabla],
+                y=[p["y"] for p in tabla],
+                mode="lines+markers",
+                name="y(t)",
+            )
+        )
+        fig.update_layout(title="Trayectoria RK4", xaxis_title="t", yaxis_title="y")
+        st.plotly_chart(fig, use_container_width=True)
 
 
 def main() -> None:
