@@ -1,27 +1,27 @@
 # Modelado-Simulacion
 
-Pequena aplicacion en Python para simular modelos matematicos desde consola.
+Pequena aplicacion en Python para simular y resolver modelos matematicos desde consola.
 
-## Modelos incluidos
+## Metodos incluidos
 
-1. **Interpolacion de Lagrange**
-   - Carga un conjunto de puntos \((x_i, y_i)\).
-   - Evalua el polinomio interpolante en un valor `x`.
+### 1) Busqueda de raices (equilibrios)
+- **Biseccion** (con chequeo de cambio de signo en \[a,b\]).
+- **Punto Fijo** \(x = g(x)\).
+- **Newton-Raphson** (requiere `f(x)` y `f'(x)`).
 
-2. **Metodo de Punto Fijo**
-   - Resuelve iterativamente \(x = g(x)\).
-   - Permite ingresar expresiones como:
-     - `cos(x)`
-     - `exp(-x)`
-     - `(x + 2/x) / 2`
-   - Muestra tabla de iteraciones y error por paso.
+### 2) Modelado de datos discretos
+- **Interpolacion de Lagrange**.
+- **Derivacion numerica por diferencia central**.
 
-3. **Modelo Logistico Discreto**
-   - Simula:
-     \[
-     x_{n+1} = r x_n \left(1 - \frac{x_n}{K}\right)
-     \]
-   - Reporta la evolucion de la serie en cada paso.
+### 3) Aceleracion de convergencia
+- **Delta-Cuadrado de Aitken** (usa los ultimos 3 terminos de una secuencia).
+
+### 4) Simulacion de evolucion (EDO)
+- **Runge-Kutta de orden 4 (RK4)** para `y' = f(t, y)`.
+
+### 5) Modelo discreto adicional
+- **Crecimiento logistico**:
+  `x_(n+1) = r * x_n * (1 - x_n / K)`.
 
 ## Requisitos
 
@@ -32,16 +32,19 @@ Pequena aplicacion en Python para simular modelos matematicos desde consola.
 Desde la raiz del proyecto:
 
 ```bash
-python app.py
+python3 app.py
 ```
 
 ## Estructura
 
-- `app.py`: interfaz de consola y flujo del menu
-- `modelos.py`: implementacion de los metodos numericos
+- `app.py`: interfaz de consola y menu interactivo
+- `modelos.py`: implementacion del motor numerico
 
-## Notas
+## Notas de uso
 
-- El evaluador de expresiones para punto fijo habilita funciones comunes de `math`:
-  `sin`, `cos`, `tan`, `exp`, `log`, `sqrt`, entre otras.
-- Para interpolacion de Lagrange, los valores de `x` en los puntos deben ser distintos.
+- Las expresiones matematicas admiten funciones comunes:
+  `sin`, `cos`, `tan`, `exp`, `log`, `sqrt`, `abs`, etc.
+- Variables esperadas por metodo:
+  - Raices e interpolacion: `x`
+  - RK4: `t` y `y`
+- En Lagrange, los valores de `x` de los puntos deben ser distintos.
