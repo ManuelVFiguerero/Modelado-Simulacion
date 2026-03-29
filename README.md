@@ -35,10 +35,25 @@ Desde la raiz del proyecto:
 python3 app.py
 ```
 
+## Interfaz web interactiva (Streamlit)
+
+Tambien podes usar una interfaz web con formularios, tablas y seleccion de ejercicios:
+
+```bash
+python3 -m pip install -r requirements.txt
+streamlit run web_app.py --server.port 8501 --server.address 0.0.0.0
+```
+
+Luego abri en el navegador:
+
+`http://localhost:8501`
+
 ## Estructura
 
 - `app.py`: interfaz de consola y menu interactivo
 - `modelos.py`: implementacion del motor numerico
+- `web_app.py`: interfaz web interactiva con Streamlit
+- `requirements.txt`: dependencias para la app web
 
 ## Modo "Ejercicios del PDF"
 
