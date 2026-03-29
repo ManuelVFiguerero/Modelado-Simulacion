@@ -40,6 +40,22 @@ python3 app.py
 - `app.py`: interfaz de consola y menu interactivo
 - `modelos.py`: implementacion del motor numerico
 
+## Modo "Ejercicios del PDF"
+
+La app incluye una opcion de menu para resolver ejercicios tipo del trabajo practico
+con entradas ya preparadas.
+
+Incluye presets para:
+- Biseccion (varios ejercicios con funcion e intervalo cargados).
+- Punto fijo (casos con g(x) y x0 sugeridos).
+- Newton-Raphson (f, f' y semilla).
+- Aitken (aplicado a secuencias de punto fijo).
+- Lagrange (nodos y punto a evaluar).
+- Diferencias centrales (funcion, punto y h).
+- RK4 para EDOs de valor inicial.
+
+Esto permite elegir un ejercicio y cambiar solo tolerancia/iteraciones cuando haga falta.
+
 ## Notas de uso
 
 - Las expresiones matematicas admiten funciones comunes:

@@ -62,6 +62,23 @@ class RK4Step:
     y: float
 
 
+@dataclass
+class AitkenStep:
+    iteracion: int
+    xn: float
+    xn1: float
+    xn2: float
+    x_aitken: float
+    error: float
+
+
+@dataclass
+class AitkenResult:
+    convergio: bool
+    aproximacion: float
+    pasos: List[AitkenStep]
+
+
 def interpolacion_lagrange(puntos: Sequence[Tuple[float, float]], x_eval: float) -> float:
     """Evalua el polinomio de Lagrange para x_eval."""
     if len(puntos) < 2:
@@ -289,6 +306,59 @@ def aitken_delta_cuadrado(secuencia: Sequence[float]) -> float:
     return x0 - ((x1 - x0) ** 2) / denominador
 
 
+def aitken_desde_punto_fijo(
+    g_expr: str,
+    x0: float,
+    tolerancia: float = 1e-6,
+    max_iter: int = 100,
+) -> AitkenResult:
+    """Aplica Aitken Delta-Cuadrado sobre una secuencia de punto fijo."""
+    if tolerancia <= 0:
+        raise ValueError("La tolerancia debe ser mayor a cero.")
+    if max_iter <= 0:
+        raise ValueError("max_iter debe ser mayor a cero.")
+
+    pasos: List[AitkenStep] = []
+    xn = x0
+    x_aitken_anterior: float | None = None
+
+    for iteracion in range(1, max_iter + 1):
+        xn1 = _evaluar_expresion(g_expr, x=xn)
+        xn2 = _evaluar_expresion(g_expr, x=xn1)
+        denominador = xn2 - 2.0 * xn1 + xn
+        if abs(denominador) < 1e-14:
+            raise ValueError(
+                "No se puede aplicar Aitken: denominador cercano a cero en iteracion "
+                f"{iteracion}."
+            )
+
+        x_aitken = xn - ((xn1 - xn) ** 2) / denominador
+        if x_aitken_anterior is None:
+            error = abs(x_aitken - xn)
+        else:
+            error = abs(x_aitken - x_aitken_anterior)
+
+        pasos.append(
+            AitkenStep(
+                iteracion=iteracion,
+                xn=xn,
+                xn1=xn1,
+                xn2=xn2,
+                x_aitken=x_aitken,
+                error=error,
+            )
+        )
+
+        if x_aitken_anterior is not None and error < tolerancia:
+            return AitkenResult(convergio=True, aproximacion=x_aitken, pasos=pasos)
+
+        x_aitken_anterior = x_aitken
+        xn = xn1
+
+    aproximacion = x_aitken_anterior if x_aitken_anterior is not None else x0
+    return AitkenResult(convergio=False, aproximacion=aproximacion, pasos=pasos)
+
+
 def runge_kutta_4(
     ode_expr: str,
     t0: float,
@@ -373,6 +443,12 @@ class MetodosNumericos:
     @staticmethod
     def aitken_accelerator(secuencia: Sequence[float]) -> float:
         return aitken_delta_cuadrado(secuencia)
+
+    @staticmethod
+    def aitken_punto_fijo(
+        g_expr: str, x0: float, tolerancia: float = 1e-6, max_iter: int = 100
+    ) -> AitkenResult:
+        return aitken_desde_punto_fijo(g_expr, x0, tolerancia, max_iter)
 
     @staticmethod
     def runge_kutta_4(
