@@ -23,6 +23,13 @@ Pequena aplicacion en Python para simular y resolver modelos matematicos desde c
 - **Crecimiento logistico**:
   `x_(n+1) = r * x_n * (1 - x_n / K)`.
 
+### 6) Integracion numerica (Newton-Cotes y Gauss)
+- **Trapecio compuesto**
+- **Simpson 1/3 compuesto**
+- **Simpson 3/8 compuesto**
+- **Rectangulo punto medio compuesto**
+- **Cuadratura de Gauss-Legendre** (2 a 5 puntos)
+
 ## Requisitos
 
 - Python 3.10 o superior
@@ -50,7 +57,8 @@ La web incluye:
 - graficos de convergencia por iteracion (Biseccion, Punto Fijo, Newton, Aitken),
 - curva de la funcion en intervalos configurables,
 - interpolacion de Lagrange con nodos + curva interpolante,
-- trayectoria RK4 y modelo logistico.
+- trayectoria RK4 y modelo logistico,
+- comparacion visual de metodos de integracion numerica.
 
 ## Interfaz web interactiva (Streamlit)
 
@@ -85,6 +93,7 @@ Incluye presets para:
 - Lagrange (nodos y punto a evaluar).
 - Diferencias centrales (funcion, punto y h).
 - RK4 para EDOs de valor inicial.
+- Integracion numerica para ejercicios de Newton-Cotes y Gauss.
 
 Esto permite elegir un ejercicio y cambiar solo tolerancia/iteraciones cuando haga falta.
 

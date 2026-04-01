@@ -293,6 +293,115 @@ def diferencia_central(f_expr: str, x: float, h: float = 1e-4) -> float:
     return (f_mas - f_menos) / (2.0 * h)
 
 
+def trapecio_compuesto(f_expr: str, a: float, b: float, n: int) -> float:
+    """Integra f(x) en [a,b] con la regla del trapecio compuesto."""
+    if b <= a:
+        raise ValueError("El intervalo debe cumplir a < b.")
+    if n < 1:
+        raise ValueError("n debe ser mayor o igual a 1.")
+
+    h = (b - a) / n
+    suma = 0.5 * _evaluar_expresion(f_expr, x=a) + 0.5 * _evaluar_expresion(f_expr, x=b)
+    for i in range(1, n):
+        x_i = a + i * h
+        suma += _evaluar_expresion(f_expr, x=x_i)
+    return h * suma
+
+
+def simpson_13_compuesto(f_expr: str, a: float, b: float, n: int) -> float:
+    """Integra f(x) en [a,b] con Simpson 1/3 compuesto."""
+    if b <= a:
+        raise ValueError("El intervalo debe cumplir a < b.")
+    if n < 2 or n % 2 != 0:
+        raise ValueError("Para Simpson 1/3, n debe ser par y >= 2.")
+
+    h = (b - a) / n
+    suma = _evaluar_expresion(f_expr, x=a) + _evaluar_expresion(f_expr, x=b)
+    for i in range(1, n):
+        x_i = a + i * h
+        coef = 4 if i % 2 == 1 else 2
+        suma += coef * _evaluar_expresion(f_expr, x=x_i)
+    return (h / 3.0) * suma
+
+
+def simpson_38_compuesto(f_expr: str, a: float, b: float, n: int) -> float:
+    """Integra f(x) en [a,b] con Simpson 3/8 compuesto."""
+    if b <= a:
+        raise ValueError("El intervalo debe cumplir a < b.")
+    if n < 3 or n % 3 != 0:
+        raise ValueError("Para Simpson 3/8, n debe ser multiplo de 3 y >= 3.")
+
+    h = (b - a) / n
+    suma = _evaluar_expresion(f_expr, x=a) + _evaluar_expresion(f_expr, x=b)
+    for i in range(1, n):
+        x_i = a + i * h
+        coef = 2 if i % 3 == 0 else 3
+        suma += coef * _evaluar_expresion(f_expr, x=x_i)
+    return (3.0 * h / 8.0) * suma
+
+
+def rectangulo_medio_compuesto(f_expr: str, a: float, b: float, n: int) -> float:
+    """Integra f(x) en [a,b] con rectangulos de punto medio."""
+    if b <= a:
+        raise ValueError("El intervalo debe cumplir a < b.")
+    if n < 1:
+        raise ValueError("n debe ser mayor o igual a 1.")
+
+    h = (b - a) / n
+    suma = 0.0
+    for i in range(n):
+        x_medio = a + (i + 0.5) * h
+        suma += _evaluar_expresion(f_expr, x=x_medio)
+    return h * suma
+
+
+_GAUSS_LEGENDRE_TABLA: Dict[int, Tuple[Tuple[float, float], ...]] = {
+    2: (
+        (-0.5773502691896257, 1.0),
+        (0.5773502691896257, 1.0),
+    ),
+    3: (
+        (-0.7745966692414834, 0.5555555555555556),
+        (0.0, 0.8888888888888888),
+        (0.7745966692414834, 0.5555555555555556),
+    ),
+    4: (
+        (-0.8611363115940526, 0.34785484513745385),
+        (-0.33998104358485626, 0.6521451548625461),
+        (0.33998104358485626, 0.6521451548625461),
+        (0.8611363115940526, 0.34785484513745385),
+    ),
+    5: (
+        (-0.906179845938664, 0.23692688505618908),
+        (-0.5384693101056831, 0.47862867049936647),
+        (0.0, 0.5688888888888889),
+        (0.5384693101056831, 0.47862867049936647),
+        (0.906179845938664, 0.23692688505618908),
+    ),
+}
+
+
+def cuadratura_gauss_legendre(
+    f_expr: str,
+    a: float,
+    b: float,
+    orden: int = 3,
+) -> float:
+    """Integra f(x) en [a,b] con cuadratura de Gauss-Legendre."""
+    if b <= a:
+        raise ValueError("El intervalo debe cumplir a < b.")
+    if orden not in _GAUSS_LEGENDRE_TABLA:
+        raise ValueError("Orden no soportado. Usa 2, 3, 4 o 5.")
+
+    c1 = (b - a) / 2.0
+    c2 = (a + b) / 2.0
+    suma = 0.0
+    for xi, wi in _GAUSS_LEGENDRE_TABLA[orden]:
+        x_transformado = c1 * xi + c2
+        suma += wi * _evaluar_expresion(f_expr, x=x_transformado)
+    return c1 * suma
+
+
 def aitken_delta_cuadrado(secuencia: Sequence[float]) -> float:
     """Acelera una secuencia usando Delta-Cuadrado de Aitken."""
     if len(secuencia) < 3:
@@ -459,3 +568,48 @@ class MetodosNumericos:
         pasos: int,
     ) -> List[RK4Step]:
         return runge_kutta_4(ode_expr, t0, y0, h, pasos)
+
+    @staticmethod
+    def trapecio(
+        f_expr: str,
+        a: float,
+        b: float,
+        n: int,
+    ) -> float:
+        return trapecio_compuesto(f_expr, a, b, n)
+
+    @staticmethod
+    def simpson_13(
+        f_expr: str,
+        a: float,
+        b: float,
+        n: int,
+    ) -> float:
+        return simpson_13_compuesto(f_expr, a, b, n)
+
+    @staticmethod
+    def simpson_38(
+        f_expr: str,
+        a: float,
+        b: float,
+        n: int,
+    ) -> float:
+        return simpson_38_compuesto(f_expr, a, b, n)
+
+    @staticmethod
+    def rectangulo_medio(
+        f_expr: str,
+        a: float,
+        b: float,
+        n: int,
+    ) -> float:
+        return rectangulo_medio_compuesto(f_expr, a, b, n)
+
+    @staticmethod
+    def gauss_legendre(
+        f_expr: str,
+        a: float,
+        b: float,
+        orden: int = 3,
+    ) -> float:
+        return cuadratura_gauss_legendre(f_expr, a, b, orden)

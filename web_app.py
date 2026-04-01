@@ -13,10 +13,15 @@ from modelos import (
     aitken_delta_cuadrado,
     biseccion,
     diferencia_central,
+    gauss_legendre_cuadratura,
     interpolacion_lagrange,
     metodo_punto_fijo,
     newton_raphson,
+    rectangulo_medio_compuesto,
     runge_kutta_4,
+    simpson_13_compuesto,
+    simpson_38_compuesto,
+    trapecio_compuesto,
 )
 
 
@@ -407,6 +412,60 @@ def _panel_rk4() -> None:
         st.plotly_chart(fig, use_container_width=True)
 
 
+def _panel_integracion() -> None:
+    st.subheader("Integracion Numerica (Newton-Cotes y Gauss)")
+
+    metodo = st.selectbox(
+        "Metodo",
+        [
+            "Trapecio compuesto",
+            "Simpson 1/3 compuesto",
+            "Simpson 3/8 compuesto",
+            "Rectangulo medio compuesto",
+            "Cuadratura de Gauss-Legendre",
+        ],
+    )
+
+    col1, col2 = st.columns(2)
+    with col1:
+        f_expr = st.text_input("f(x) integrar", value="sin(x)")
+        a = st.number_input("Limite inferior a", value=0.0)
+        b = st.number_input("Limite superior b", value=3.1415926536)
+    with col2:
+        n_default = 6 if "3/8" in metodo else 4
+        n = st.number_input("Subintervalos / puntos n", min_value=1, value=n_default, step=1)
+
+    if st.button("Integrar", use_container_width=True):
+        try:
+            if metodo == "Trapecio compuesto":
+                integral = trapecio_compuesto(f_expr, a, b, int(n))
+            elif metodo == "Simpson 1/3 compuesto":
+                integral = simpson_13_compuesto(f_expr, a, b, int(n))
+            elif metodo == "Simpson 3/8 compuesto":
+                integral = simpson_38_compuesto(f_expr, a, b, int(n))
+            elif metodo == "Rectangulo medio compuesto":
+                integral = rectangulo_medio_compuesto(f_expr, a, b, int(n))
+            else:
+                integral = gauss_legendre_cuadratura(f_expr, a, b, int(n))
+        except ValueError as exc:
+            st.error(str(exc))
+            return
+
+        st.success(f"Integral aproximada: {integral:.12f}")
+
+        # Visualizacion del integrando en [a,b]
+        try:
+            xs = [a + (b - a) * i / 300 for i in range(301)]
+            ys = _eval_expr_points(f_expr, xs)
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=xs, y=ys, mode="lines", name="f(x)"))
+            fig.add_hline(y=0, line_dash="dash")
+            fig.update_layout(title="Integrando en [a,b]", xaxis_title="x", yaxis_title="f(x)")
+            st.plotly_chart(fig, use_container_width=True)
+        except Exception:
+            st.info("No se pudo graficar la funcion en el intervalo.")
+
+
 def main() -> None:
     _mostrar_titulo()
     opcion = st.sidebar.selectbox(
@@ -419,6 +478,7 @@ def main() -> None:
             "Diferencia Central",
             "Aitken",
             "RK4",
+            "Integracion Numerica",
         ],
     )
 
@@ -434,6 +494,8 @@ def main() -> None:
         _panel_diferencia_central()
     elif opcion == "Aitken":
         _panel_aitken()
+    elif opcion == "Integracion Numerica":
+        _panel_integracion()
     else:
         _panel_rk4()
 
