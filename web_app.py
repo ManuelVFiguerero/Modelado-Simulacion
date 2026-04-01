@@ -12,8 +12,8 @@ from modelos import (
     aitken_desde_punto_fijo,
     aitken_delta_cuadrado,
     biseccion,
+    cuadratura_gauss_legendre,
     diferencia_central,
-    gauss_legendre_cuadratura,
     interpolacion_lagrange,
     metodo_punto_fijo,
     newton_raphson,
@@ -446,7 +446,7 @@ def _panel_integracion() -> None:
             elif metodo == "Rectangulo medio compuesto":
                 integral = rectangulo_medio_compuesto(f_expr, a, b, int(n))
             else:
-                integral = gauss_legendre_cuadratura(f_expr, a, b, int(n))
+                integral = cuadratura_gauss_legendre(f_expr, a, b, int(n))
         except ValueError as exc:
             st.error(str(exc))
             return

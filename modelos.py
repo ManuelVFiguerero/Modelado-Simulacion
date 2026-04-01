@@ -402,6 +402,16 @@ def cuadratura_gauss_legendre(
     return c1 * suma
 
 
+def gauss_legendre_cuadratura(
+    f_expr: str,
+    a: float,
+    b: float,
+    orden: int = 3,
+) -> float:
+    """Alias de compatibilidad para cuadratura de Gauss-Legendre."""
+    return cuadratura_gauss_legendre(f_expr, a, b, orden)
+
+
 def aitken_delta_cuadrado(secuencia: Sequence[float]) -> float:
     """Acelera una secuencia usando Delta-Cuadrado de Aitken."""
     if len(secuencia) < 3:
