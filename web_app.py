@@ -466,6 +466,74 @@ def _panel_integracion() -> None:
             st.info("No se pudo graficar la funcion en el intervalo.")
 
 
+_ATAJOS_EXPRESIONES = {
+    "Raices - Biseccion/Newton": [
+        ("exp(x) - x**2 + 3*x - 2", "f(x) del TP"),
+        ("sqrt(x) - cos(x)", "f(x) en [0,1]"),
+        ("x - 2**(-x)", "f(x)=0 equivalente"),
+        ("2*x*cos(x) - (x+1)**2", "funcion con trigonometria"),
+    ],
+    "Punto fijo (g(x))": [
+        ("cos(x)", "g(x) para cos(x)-x=0"),
+        ("exp(-x)", "g(x) para exp(-x)-x=0"),
+        ("(x + 3/x)/2", "iteracion para aproximar sqrt(3)"),
+        ("2**(-x)", "g(x)=2^{-x}"),
+    ],
+    "Newton - derivadas f'(x)": [
+        ("3*x**2 - 2", "derivada de x**3 - 2*x - 5"),
+        ("exp(x) + 2*x", "derivada de exp(x)+x**2-4"),
+        ("1/x", "derivada de log(x)"),
+        ("6*x**5", "derivada de x**6 - 2"),
+    ],
+    "RK4 y EDO": [
+        ("y + t**2", "y' = y + t^2"),
+        ("y*sin(t)", "y' = y sin(t)"),
+        ("exp(-t) - y", "y' = e^{-t} - y"),
+        ("0.1*y", "crecimiento exponencial simple"),
+    ],
+    "Integracion numerica": [
+        ("sin(x)", "integral en [0, pi]"),
+        ("exp(x)", "integral de e^x"),
+        ("x**2*exp(x)", "integrando polinomio-exponencial"),
+        ("1/(1+x**2)", "integrando racional"),
+    ],
+}
+
+
+def _panel_atajos() -> None:
+    st.subheader("Chuleta de sintaxis y atajos")
+    st.markdown(
+        "- Potencia: `x**2` (no usar `^`)\n"
+        "- Multiplicacion: `2*x` (no escribir `2x`)\n"
+        "- Division: `(x+1)/(x-2)`\n"
+        "- Funciones: `sin`, `cos`, `exp`, `log`, `sqrt`, `abs`\n"
+        "- Constantes: `pi`, `e`\n"
+        "- Variables: usar `x`; en RK4 usar `t` y `y`"
+    )
+
+    categoria = st.selectbox("Categoria", list(_ATAJOS_EXPRESIONES.keys()))
+    opciones = _ATAJOS_EXPRESIONES[categoria]
+    labels = [f"{i + 1}) {desc}" for i, (_, desc) in enumerate(opciones)]
+    idx = st.selectbox("Atajo rapido", range(len(labels)), format_func=lambda i: labels[i])
+
+    expr, desc = opciones[idx]
+    st.write(f"**Seleccionado:** {desc}")
+    st.text_input("Expresion lista para copiar", value=expr, key=f"atajo_{categoria}_{idx}")
+    st.code(expr, language="python")
+
+    with st.expander("Mas ejemplos utiles"):
+        ejemplos = [
+            ("x*cos(x) - 2*x**2 + 3*x - 1", "Biseccion/Newton"),
+            ("(x+1)**(1/3)", "Punto fijo para x**3-x-1=0"),
+            ("(x + 2/x)/2", "Punto fijo para aproximar sqrt(2)"),
+            ("x**4 - 2*x**3 - 4*x**2 + 4*x + 4", "Polinomio de grado 4"),
+            ("log(x+1)", "Natural log con desplazamiento"),
+        ]
+        for expr_ex, contexto in ejemplos:
+            st.markdown(f"- {contexto}")
+            st.code(expr_ex, language="python")
+
+
 def main() -> None:
     _mostrar_titulo()
     opcion = st.sidebar.selectbox(
@@ -479,6 +547,7 @@ def main() -> None:
             "Aitken",
             "RK4",
             "Integracion Numerica",
+            "Chuleta / Atajos",
         ],
     )
 
@@ -496,6 +565,8 @@ def main() -> None:
         _panel_aitken()
     elif opcion == "Integracion Numerica":
         _panel_integracion()
+    elif opcion == "Chuleta / Atajos":
+        _panel_atajos()
     else:
         _panel_rk4()
 

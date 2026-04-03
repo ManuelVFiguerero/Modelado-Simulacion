@@ -58,7 +58,8 @@ La web incluye:
 - curva de la funcion en intervalos configurables,
 - interpolacion de Lagrange con nodos + curva interpolante,
 - trayectoria RK4 y modelo logistico,
-- comparacion visual de metodos de integracion numerica.
+- comparacion visual de metodos de integracion numerica,
+- pagina "Chuleta / Atajos" con expresiones listas para copiar y pegar.
 
 ## Interfaz web interactiva (Streamlit)
 
