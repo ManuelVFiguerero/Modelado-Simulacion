@@ -6,6 +6,8 @@ from dataclasses import dataclass
 import math
 from typing import Any, Dict, List, Mapping, Sequence, Tuple
 
+_ANGULAR_MODE = "radianes"
+
 
 @dataclass
 class FixedPointStep:
@@ -79,6 +81,36 @@ class AitkenResult:
     pasos: List[AitkenStep]
 
 
+def _normalizar_modo_angular(mode: str) -> str:
+    mode_normalized = mode.strip().lower()
+    if mode_normalized not in ("radianes", "grados"):
+        raise ValueError("Modo angular invalido. Usa 'radianes' o 'grados'.")
+    return mode_normalized
+
+
+def _resolver_modo_angular(angle_mode: str | None) -> str:
+    if angle_mode is None:
+        return _ANGULAR_MODE
+    return _normalizar_modo_angular(angle_mode)
+
+
+def set_angular_mode(mode: str) -> None:
+    """Configura el modo angular para funciones trigonometricas.
+
+    Valores permitidos:
+    - "radianes"
+    - "grados"
+    """
+    mode_normalized = _normalizar_modo_angular(mode)
+    global _ANGULAR_MODE
+    _ANGULAR_MODE = mode_normalized
+
+
+def get_angular_mode() -> str:
+    """Devuelve el modo angular actual."""
+    return _ANGULAR_MODE
+
+
 def interpolacion_lagrange(puntos: Sequence[Tuple[float, float]], x_eval: float) -> float:
     """Evalua el polinomio de Lagrange para x_eval."""
     if len(puntos) < 2:
@@ -102,24 +134,38 @@ def interpolacion_lagrange(puntos: Sequence[Tuple[float, float]], x_eval: float)
     return resultado
 
 
-def _entorno_matematico(variables: Mapping[str, float]) -> Dict[str, Any]:
+def _entorno_matematico(
+    variables: Mapping[str, float], angle_mode: str | None = None
+) -> Dict[str, Any]:
     """Arma un entorno seguro para evaluar expresiones matematicas."""
     entorno: Dict[str, Any] = {
         "pi": math.pi,
         "e": math.e,
         "abs": abs,
         "pow": pow,
+        "radians": math.radians,
+        "degrees": math.degrees,
     }
     entorno.update(variables)
 
-    # Exponer funciones comunes de math.
-    funciones_permitidas = (
-        "sin",
-        "cos",
-        "tan",
-        "asin",
-        "acos",
-        "atan",
+    modo = _resolver_modo_angular(angle_mode)
+
+    def _to_radians(x: float) -> float:
+        return math.radians(x) if modo == "grados" else x
+
+    def _from_radians(x: float) -> float:
+        return math.degrees(x) if modo == "grados" else x
+
+    # Funciones trigonometricas con modo angular configurable.
+    entorno["sin"] = lambda x: math.sin(_to_radians(x))
+    entorno["cos"] = lambda x: math.cos(_to_radians(x))
+    entorno["tan"] = lambda x: math.tan(_to_radians(x))
+    entorno["asin"] = lambda x: _from_radians(math.asin(x))
+    entorno["acos"] = lambda x: _from_radians(math.acos(x))
+    entorno["atan"] = lambda x: _from_radians(math.atan(x))
+
+    # Exponer otras funciones comunes de math.
+    funciones_directas = (
         "exp",
         "log",
         "log10",
@@ -131,14 +177,16 @@ def _entorno_matematico(variables: Mapping[str, float]) -> Dict[str, Any]:
         "floor",
         "ceil",
     )
-    for nombre in funciones_permitidas:
+    for nombre in funciones_directas:
         entorno[nombre] = getattr(math, nombre)
     return entorno
 
 
-def _evaluar_expresion(expr: str, **variables: float) -> float:
+def _evaluar_expresion(
+    expr: str, angle_mode: str | None = None, **variables: float
+) -> float:
     """Evalua una expresion con variables dadas y funciones de math."""
-    entorno = _entorno_matematico(variables)
+    entorno = _entorno_matematico(variables, angle_mode=angle_mode)
 
     try:
         valor = eval(expr, {"__builtins__": {}}, entorno)
@@ -149,6 +197,13 @@ def _evaluar_expresion(expr: str, **variables: float) -> float:
         return float(valor)
     except (TypeError, ValueError) as exc:
         raise ValueError("La expresion no devolvio un numero real.") from exc
+
+
+def evaluar_expresion(
+    expr: str, angle_mode: str | None = None, **variables: float
+) -> float:
+    """Evalua expresiones respetando el modo angular configurado."""
+    return _evaluar_expresion(expr, angle_mode=angle_mode, **variables)
 
 
 def biseccion(
@@ -623,3 +678,7 @@ class MetodosNumericos:
         orden: int = 3,
     ) -> float:
         return cuadratura_gauss_legendre(f_expr, a, b, orden)
+
+    @staticmethod
+    def set_modo_angular(mode: str) -> None:
+        set_angular_mode(mode)

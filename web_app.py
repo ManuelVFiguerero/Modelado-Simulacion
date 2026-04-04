@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict
+import math
 from typing import List, Tuple
 
 import plotly.graph_objects as go
@@ -14,11 +15,14 @@ from modelos import (
     biseccion,
     cuadratura_gauss_legendre,
     diferencia_central,
+    evaluar_expresion,
+    get_angular_mode,
     interpolacion_lagrange,
     metodo_punto_fijo,
     newton_raphson,
     rectangulo_medio_compuesto,
     runge_kutta_4,
+    set_angular_mode,
     simpson_13_compuesto,
     simpson_38_compuesto,
     trapecio_compuesto,
@@ -90,6 +94,17 @@ def _mostrar_titulo() -> None:
     st.set_page_config(page_title="Modelado y Simulacion", page_icon="📈", layout="wide")
     st.title("📈 Simulador de Modelos Matematicos")
     st.caption("Interfaz web interactiva para resolver ejercicios numericos.")
+    if "angle_mode" not in st.session_state:
+        st.session_state["angle_mode"] = "radianes"
+    modo = st.sidebar.radio(
+        "Modo angular trigonometrico",
+        ["Radianes", "Grados"],
+        index=0 if st.session_state["angle_mode"] == "radianes" else 1,
+    )
+    st.session_state["angle_mode"] = "radianes" if modo == "Radianes" else "grados"
+    st.sidebar.caption(
+        f"Modo activo: {st.session_state['angle_mode']} (sin/cos/tan)"
+    )
 
 
 def _panel_biseccion() -> None:
@@ -105,7 +120,14 @@ def _panel_biseccion() -> None:
 
     if st.button("Resolver Biseccion", use_container_width=True):
         try:
-            resultado = biseccion(f_expr, a, b, float(tolerancia), int(max_iter))
+            resultado = biseccion(
+                f_expr,
+                a,
+                b,
+                float(tolerancia),
+                int(max_iter),
+                angle_mode=st.session_state["angle_mode"],
+            )
         except ValueError as exc:
             st.error(str(exc))
             return
@@ -135,7 +157,9 @@ def _panel_biseccion() -> None:
 
             try:
                 xs = [a + (b - a) * i / 200 for i in range(201)]
-                ys = _eval_expr_points(f_expr, xs)
+                ys = _eval_expr_points(
+                    f_expr, xs, angle_mode=st.session_state["angle_mode"]
+                )
                 fig_fx = go.Figure()
                 fig_fx.add_trace(
                     go.Scatter(x=xs, y=ys, mode="lines", name="f(x)")
@@ -168,7 +192,13 @@ def _panel_punto_fijo() -> None:
 
     if st.button("Resolver Punto Fijo", use_container_width=True):
         try:
-            resultado = metodo_punto_fijo(g_expr, x0, float(tolerancia), int(max_iter))
+            resultado = metodo_punto_fijo(
+                g_expr,
+                x0,
+                float(tolerancia),
+                int(max_iter),
+                angle_mode=st.session_state["angle_mode"],
+            )
         except ValueError as exc:
             st.error(str(exc))
             return
@@ -213,7 +243,12 @@ def _panel_newton() -> None:
     if st.button("Resolver Newton", use_container_width=True):
         try:
             resultado = newton_raphson(
-                f_expr, df_expr, x0, float(tolerancia), int(max_iter)
+                f_expr,
+                df_expr,
+                x0,
+                float(tolerancia),
+                int(max_iter),
+                angle_mode=st.session_state["angle_mode"],
             )
         except ValueError as exc:
             st.error(str(exc))
@@ -299,7 +334,9 @@ def _panel_diferencia_central() -> None:
 
     if st.button("Derivar", use_container_width=True):
         try:
-            derivada = diferencia_central(f_expr, x, float(h))
+            derivada = diferencia_central(
+                f_expr, x, float(h), angle_mode=st.session_state["angle_mode"]
+            )
         except ValueError as exc:
             st.error(str(exc))
             return
@@ -307,7 +344,9 @@ def _panel_diferencia_central() -> None:
 
         try:
             xs = [x - 5 * float(h) + i * float(h) for i in range(11)]
-            ys = _eval_expr_points(f_expr, xs)
+            ys = _eval_expr_points(
+                f_expr, xs, angle_mode=st.session_state["angle_mode"]
+            )
             fig = go.Figure()
             fig.add_trace(go.Scatter(x=xs, y=ys, mode="lines+markers", name="f(x)"))
             fig.add_vline(x=x, line_dash="dash")
@@ -350,7 +389,11 @@ def _panel_aitken() -> None:
         if st.button("Aplicar Aitken (punto fijo)", use_container_width=True):
             try:
                 resultado = aitken_desde_punto_fijo(
-                    g_expr, x0, float(tolerancia), int(max_iter)
+                    g_expr,
+                    x0,
+                    float(tolerancia),
+                    int(max_iter),
+                    angle_mode=st.session_state["angle_mode"],
                 )
             except ValueError as exc:
                 st.error(str(exc))
@@ -392,7 +435,14 @@ def _panel_rk4() -> None:
 
     if st.button("Simular RK4", use_container_width=True):
         try:
-            trayectoria = runge_kutta_4(ode_expr, t0, y0, float(h), int(pasos))
+            trayectoria = runge_kutta_4(
+                ode_expr,
+                t0,
+                y0,
+                float(h),
+                int(pasos),
+                angle_mode=st.session_state["angle_mode"],
+            )
         except ValueError as exc:
             st.error(str(exc))
             return
@@ -440,13 +490,37 @@ def _panel_integracion() -> None:
             if metodo == "Trapecio compuesto":
                 integral = trapecio_compuesto(f_expr, a, b, int(n))
             elif metodo == "Simpson 1/3 compuesto":
-                integral = simpson_13_compuesto(f_expr, a, b, int(n))
+                integral = simpson_13_compuesto(
+                    f_expr,
+                    a,
+                    b,
+                    int(n),
+                    angle_mode=st.session_state["angle_mode"],
+                )
             elif metodo == "Simpson 3/8 compuesto":
-                integral = simpson_38_compuesto(f_expr, a, b, int(n))
+                integral = simpson_38_compuesto(
+                    f_expr,
+                    a,
+                    b,
+                    int(n),
+                    angle_mode=st.session_state["angle_mode"],
+                )
             elif metodo == "Rectangulo medio compuesto":
-                integral = rectangulo_medio_compuesto(f_expr, a, b, int(n))
+                integral = rectangulo_medio_compuesto(
+                    f_expr,
+                    a,
+                    b,
+                    int(n),
+                    angle_mode=st.session_state["angle_mode"],
+                )
             else:
-                integral = cuadratura_gauss_legendre(f_expr, a, b, int(n))
+                integral = cuadratura_gauss_legendre(
+                    f_expr,
+                    a,
+                    b,
+                    int(n),
+                    angle_mode=st.session_state["angle_mode"],
+                )
         except ValueError as exc:
             st.error(str(exc))
             return
@@ -456,7 +530,9 @@ def _panel_integracion() -> None:
         # Visualizacion del integrando en [a,b]
         try:
             xs = [a + (b - a) * i / 300 for i in range(301)]
-            ys = _eval_expr_points(f_expr, xs)
+            ys = _eval_expr_points(
+                f_expr, xs, angle_mode=st.session_state["angle_mode"]
+            )
             fig = go.Figure()
             fig.add_trace(go.Scatter(x=xs, y=ys, mode="lines", name="f(x)"))
             fig.add_hline(y=0, line_dash="dash")
@@ -509,6 +585,10 @@ def _panel_atajos() -> None:
         "- Funciones: `sin`, `cos`, `exp`, `log`, `sqrt`, `abs`\n"
         "- Constantes: `pi`, `e`\n"
         "- Variables: usar `x`; en RK4 usar `t` y `y`"
+    )
+    st.info(
+        "Atajo angular: podes elegir **Radianes** o **Grados** desde la barra lateral. "
+        "Afecta sin/cos/tan y sus inversas en toda la app."
     )
 
     categoria = st.selectbox("Categoria", list(_ATAJOS_EXPRESIONES.keys()))
