@@ -86,6 +86,7 @@ class AitkenResult:
 @dataclass
 class MonteCarloResult:
     estimacion: float
+    varianza_muestral: float
     desvio_muestral: float
     error_estandar: float
     ic_bajo: float
@@ -93,6 +94,42 @@ class MonteCarloResult:
     confianza: float
     n: int
     muestras_transformadas: List[float] | None = None
+    x_muestras: List[float] | None = None
+
+
+@dataclass
+class MonteCarloDoubleResult:
+    estimacion: float
+    varianza_muestral: float
+    desvio_muestral: float
+    error_estandar: float
+    ic_bajo: float
+    ic_alto: float
+    confianza: float
+    n: int
+    muestras_transformadas: List[float] | None = None
+    x_muestras: List[float] | None = None
+    y_muestras: List[float] | None = None
+    fxy_muestras: List[float] | None = None
+
+
+@dataclass
+class MonteCarloTradingResult:
+    precio_call_mc: float
+    precio_call_bs: float
+    varianza_call: float
+    desvio_call: float
+    error_estandar_call: float
+    ic_call_bajo: float
+    ic_call_alto: float
+    confianza: float
+    n_paths: int
+    var_portafolio: float
+    es_portafolio: float
+    horizonte_dias: int
+    pnl_muestras: List[float] | None = None
+    perdidas_muestras: List[float] | None = None
+    call_descuentos_muestras: List[float] | None = None
 
 
 def _normalizar_modo_angular(mode: str) -> str:
@@ -501,8 +538,10 @@ def integracion_montecarlo(
     rng = random.Random(seed)
     ancho = b - a
     valores: List[float] = []
+    x_muestras: List[float] = []
     for _ in range(n):
         x = rng.uniform(a, b)
+        x_muestras.append(x)
         valores.append(ancho * _evaluar_expresion(f_expr, angle_mode=angle_mode, x=x))
 
     media = sum(valores) / n
@@ -514,6 +553,7 @@ def integracion_montecarlo(
 
     return MonteCarloResult(
         estimacion=media,
+        varianza_muestral=var,
         desvio_muestral=desvio,
         error_estandar=error_estandar,
         ic_bajo=media - margen,
@@ -521,6 +561,7 @@ def integracion_montecarlo(
         confianza=confianza,
         n=n,
         muestras_transformadas=valores,
+        x_muestras=x_muestras,
     )
 
 
@@ -540,6 +581,251 @@ def intervalo_confianza_normal(
     z = NormalDist().inv_cdf(0.5 + confianza / 2.0)
     margen = z * error_estandar
     return (media - margen, media + margen)
+
+
+def integracion_monte_carlo_doble(
+    f_expr: str,
+    ax: float,
+    bx: float,
+    ay: float,
+    by: float,
+    n: int,
+    confianza: float = 0.95,
+    seed: int | None = None,
+    angle_mode: str | None = None,
+) -> MonteCarloDoubleResult:
+    """Alias de compatibilidad para integracion_montecarlo_doble."""
+    return integracion_montecarlo_doble(
+        f_expr=f_expr,
+        ax=ax,
+        bx=bx,
+        ay=ay,
+        by=by,
+        n=n,
+        confianza=confianza,
+        seed=seed,
+        angle_mode=angle_mode,
+    )
+
+
+def montecarlo_call_y_var(
+    s0: float,
+    k: float,
+    r: float,
+    sigma: float,
+    t_years: float,
+    n_paths: int,
+    shares_qty: float = 1.0,
+    calls_qty: float = 1.0,
+    confidence: float = 0.99,
+    horizon_days: int = 1,
+    seed: int | None = None,
+) -> MonteCarloTradingResult:
+    """Alias de compatibilidad para montecarlo_call_europea_y_var."""
+    return montecarlo_call_europea_y_var(
+        s0=s0,
+        k=k,
+        r=r,
+        sigma=sigma,
+        t_years=t_years,
+        n_paths=n_paths,
+        shares_qty=shares_qty,
+        calls_qty=calls_qty,
+        confidence=confidence,
+        horizon_days=horizon_days,
+        seed=seed,
+    )
+
+
+def integracion_montecarlo_doble(
+    f_expr: str,
+    ax: float,
+    bx: float,
+    ay: float,
+    by: float,
+    n: int,
+    confianza: float = 0.95,
+    seed: int | None = None,
+    angle_mode: str | None = None,
+) -> MonteCarloDoubleResult:
+    """Integra f(x,y) en [ax,bx]x[ay,by] por Monte Carlo con IC normal."""
+    if bx <= ax or by <= ay:
+        raise ValueError("El rectangulo debe cumplir ax < bx y ay < by.")
+    if n < 2:
+        raise ValueError("n debe ser mayor o igual a 2.")
+    if not (0 < confianza < 1):
+        raise ValueError("La confianza debe estar entre 0 y 1.")
+
+    rng = random.Random(seed)
+    area = (bx - ax) * (by - ay)
+
+    muestras_transformadas: List[float] = []
+    x_muestras: List[float] = []
+    y_muestras: List[float] = []
+    fxy_muestras: List[float] = []
+
+    for _ in range(n):
+        x = rng.uniform(ax, bx)
+        y = rng.uniform(ay, by)
+        fx = _evaluar_expresion(f_expr, angle_mode=angle_mode, x=x, y=y)
+        valor = area * fx
+        muestras_transformadas.append(valor)
+        x_muestras.append(x)
+        y_muestras.append(y)
+        fxy_muestras.append(fx)
+
+    media = sum(muestras_transformadas) / n
+    var = sum((v - media) ** 2 for v in muestras_transformadas) / (n - 1)
+    desvio = math.sqrt(var)
+    error_estandar = desvio / math.sqrt(n)
+    z = NormalDist().inv_cdf(0.5 + confianza / 2.0)
+    margen = z * error_estandar
+
+    return MonteCarloDoubleResult(
+        estimacion=media,
+        varianza_muestral=var,
+        desvio_muestral=desvio,
+        error_estandar=error_estandar,
+        ic_bajo=media - margen,
+        ic_alto=media + margen,
+        confianza=confianza,
+        n=n,
+        muestras_transformadas=muestras_transformadas,
+        x_muestras=x_muestras,
+        y_muestras=y_muestras,
+        fxy_muestras=fxy_muestras,
+    )
+
+
+def _normal_cdf(x: float) -> float:
+    return 0.5 * (1.0 + math.erf(x / math.sqrt(2.0)))
+
+
+def _black_scholes_call(s: float, k: float, r: float, sigma: float, t: float) -> float:
+    """Precio Black-Scholes de call europea sin dividendos."""
+    if t <= 0:
+        return max(s - k, 0.0)
+    if sigma <= 0:
+        forward_intrinseco = s - k * math.exp(-r * t)
+        return max(forward_intrinseco, 0.0)
+
+    d1 = (math.log(s / k) + (r + 0.5 * sigma * sigma) * t) / (sigma * math.sqrt(t))
+    d2 = d1 - sigma * math.sqrt(t)
+    return s * _normal_cdf(d1) - k * math.exp(-r * t) * _normal_cdf(d2)
+
+
+def _percentil_ordenado(valores: Sequence[float], q: float) -> float:
+    """Percentil simple por posicion en lista ordenada."""
+    if not valores:
+        raise ValueError("No hay valores para calcular percentil.")
+    if q <= 0:
+        return min(valores)
+    if q >= 1:
+        return max(valores)
+
+    ordenados = sorted(valores)
+    idx = int(math.ceil(q * len(ordenados))) - 1
+    idx = max(0, min(idx, len(ordenados) - 1))
+    return ordenados[idx]
+
+
+def montecarlo_call_europea_y_var(
+    s0: float,
+    k: float,
+    r: float,
+    sigma: float,
+    t_years: float,
+    n_paths: int,
+    shares_qty: float = 1.0,
+    calls_qty: float = 1.0,
+    confidence: float = 0.99,
+    horizon_days: int = 1,
+    seed: int | None = None,
+) -> MonteCarloTradingResult:
+    """Precio de call europea por Monte Carlo + VaR/ES de cartera simple.
+
+    Cartera: shares_qty * accion + calls_qty * call europea.
+    """
+    if s0 <= 0 or k <= 0:
+        raise ValueError("s0 y k deben ser mayores a cero.")
+    if sigma < 0:
+        raise ValueError("sigma no puede ser negativo.")
+    if t_years <= 0:
+        raise ValueError("t_years debe ser mayor a cero.")
+    if n_paths < 100:
+        raise ValueError("n_paths debe ser al menos 100 para estadistica estable.")
+    if not (0 < confidence < 1):
+        raise ValueError("confidence debe estar entre 0 y 1.")
+    if horizon_days < 1:
+        raise ValueError("horizon_days debe ser >= 1.")
+
+    rng = random.Random(seed)
+
+    # 1) Precio de call por MC al vencimiento
+    descuentos: List[float] = []
+    drift_t = (r - 0.5 * sigma * sigma) * t_years
+    vol_t = sigma * math.sqrt(t_years)
+    descuento = math.exp(-r * t_years)
+    for _ in range(n_paths):
+        z = rng.gauss(0.0, 1.0)
+        st = s0 * math.exp(drift_t + vol_t * z)
+        descuentos.append(descuento * max(st - k, 0.0))
+
+    precio_call_mc = sum(descuentos) / n_paths
+    var_call = (
+        sum((v - precio_call_mc) ** 2 for v in descuentos) / (n_paths - 1)
+        if n_paths > 1
+        else 0.0
+    )
+    desvio_call = math.sqrt(var_call)
+    error_call = desvio_call / math.sqrt(n_paths)
+    z_conf = NormalDist().inv_cdf(0.5 + confidence / 2.0)
+    margen = z_conf * error_call
+    ic_bajo = precio_call_mc - margen
+    ic_alto = precio_call_mc + margen
+
+    # 2) VaR/ES a horizonte dado para cartera
+    dt = horizon_days / 252.0
+    t_remanente = max(t_years - dt, 1e-10)
+    precio_call_bs_hoy = _black_scholes_call(s0, k, r, sigma, t_years)
+    valor_hoy = shares_qty * s0 + calls_qty * precio_call_bs_hoy
+
+    pnl_muestras: List[float] = []
+    perdidas: List[float] = []
+    drift_dt = (r - 0.5 * sigma * sigma) * dt
+    vol_dt = sigma * math.sqrt(dt)
+
+    for _ in range(n_paths):
+        z = rng.gauss(0.0, 1.0)
+        s1 = s0 * math.exp(drift_dt + vol_dt * z)
+        call_1 = _black_scholes_call(s1, k, r, sigma, t_remanente)
+        valor_1 = shares_qty * s1 + calls_qty * call_1
+        pnl = valor_1 - valor_hoy
+        perdida = -pnl
+        pnl_muestras.append(pnl)
+        perdidas.append(perdida)
+
+    var_portafolio = _percentil_ordenado(perdidas, confidence)
+    cola = [p for p in perdidas if p >= var_portafolio]
+    es_portafolio = sum(cola) / len(cola) if cola else var_portafolio
+
+    return MonteCarloTradingResult(
+        precio_call_mc=precio_call_mc,
+        precio_call_bs=precio_call_bs_hoy,
+        varianza_call=var_call,
+        desvio_call=desvio_call,
+        error_estandar_call=error_call,
+        ic_call_bajo=ic_bajo,
+        ic_call_alto=ic_alto,
+        confianza=confidence,
+        n_paths=n_paths,
+        var_portafolio=var_portafolio,
+        es_portafolio=es_portafolio,
+        horizonte_dias=horizon_days,
+        pnl_muestras=pnl_muestras,
+        perdidas_muestras=perdidas,
+        call_descuentos_muestras=descuentos,
+    )
 
 
 def aitken_delta_cuadrado(secuencia: Sequence[float]) -> float:
@@ -764,6 +1050,49 @@ class MetodosNumericos:
         seed: int | None = None,
     ) -> MonteCarloResult:
         return integracion_montecarlo(f_expr, a, b, n, confianza, seed)
+
+    @staticmethod
+    def montecarlo_doble(
+        f_expr: str,
+        ax: float,
+        bx: float,
+        ay: float,
+        by: float,
+        n: int,
+        confianza: float = 0.95,
+        seed: int | None = None,
+    ) -> MonteCarloDoubleResult:
+        return integracion_montecarlo_doble(
+            f_expr, ax, bx, ay, by, n, confianza, seed
+        )
+
+    @staticmethod
+    def montecarlo_trading(
+        s0: float,
+        k: float,
+        r: float,
+        sigma: float,
+        t_years: float,
+        n_paths: int,
+        shares_qty: float = 1.0,
+        calls_qty: float = 1.0,
+        confidence: float = 0.99,
+        horizon_days: int = 1,
+        seed: int | None = None,
+    ) -> MonteCarloTradingResult:
+        return montecarlo_call_europea_y_var(
+            s0=s0,
+            k=k,
+            r=r,
+            sigma=sigma,
+            t_years=t_years,
+            n_paths=n_paths,
+            shares_qty=shares_qty,
+            calls_qty=calls_qty,
+            confidence=confidence,
+            horizon_days=horizon_days,
+            seed=seed,
+        )
 
     @staticmethod
     def set_modo_angular(mode: str) -> None:
