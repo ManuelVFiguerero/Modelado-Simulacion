@@ -17,6 +17,7 @@ from modelos import (
     diferencia_central,
     evaluar_expresion,
     get_angular_mode,
+    integracion_montecarlo,
     interpolacion_lagrange,
     metodo_punto_fijo,
     newton_raphson,
@@ -29,33 +30,20 @@ from modelos import (
 )
 
 
+_Z_SCORES = {
+    0.8: 1.2815515655446004,
+    0.9: 1.6448536269514722,
+    0.95: 1.959963984540054,
+    0.99: 2.5758293035489004,
+    0.997: 2.9677379253417944,
+}
+
+
 def _eval_expr_points(expr: str, xs: List[float]) -> List[float]:
-    """Evalua expresiones con la misma whitelist usada por modelos.py."""
+    """Evalua expresiones usando el motor comun (respeta modo angular)."""
     ys: List[float] = []
-    safe_math = {
-        "sin": __import__("math").sin,
-        "cos": __import__("math").cos,
-        "tan": __import__("math").tan,
-        "asin": __import__("math").asin,
-        "acos": __import__("math").acos,
-        "atan": __import__("math").atan,
-        "exp": __import__("math").exp,
-        "log": __import__("math").log,
-        "log10": __import__("math").log10,
-        "sqrt": __import__("math").sqrt,
-        "fabs": __import__("math").fabs,
-        "sinh": __import__("math").sinh,
-        "cosh": __import__("math").cosh,
-        "tanh": __import__("math").tanh,
-        "floor": __import__("math").floor,
-        "ceil": __import__("math").ceil,
-        "pi": __import__("math").pi,
-        "e": __import__("math").e,
-        "abs": abs,
-        "pow": pow,
-    }
     for x in xs:
-        ys.append(float(eval(expr, {"__builtins__": {}}, {**safe_math, "x": x})))
+        ys.append(float(evaluar_expresion(expr, x=x)))
     return ys
 
 
@@ -120,14 +108,7 @@ def _panel_biseccion() -> None:
 
     if st.button("Resolver Biseccion", use_container_width=True):
         try:
-            resultado = biseccion(
-                f_expr,
-                a,
-                b,
-                float(tolerancia),
-                int(max_iter),
-                angle_mode=st.session_state["angle_mode"],
-            )
+            resultado = biseccion(f_expr, a, b, float(tolerancia), int(max_iter))
         except ValueError as exc:
             st.error(str(exc))
             return
@@ -157,9 +138,7 @@ def _panel_biseccion() -> None:
 
             try:
                 xs = [a + (b - a) * i / 200 for i in range(201)]
-                ys = _eval_expr_points(
-                    f_expr, xs, angle_mode=st.session_state["angle_mode"]
-                )
+                ys = _eval_expr_points(f_expr, xs)
                 fig_fx = go.Figure()
                 fig_fx.add_trace(
                     go.Scatter(x=xs, y=ys, mode="lines", name="f(x)")
@@ -192,13 +171,7 @@ def _panel_punto_fijo() -> None:
 
     if st.button("Resolver Punto Fijo", use_container_width=True):
         try:
-            resultado = metodo_punto_fijo(
-                g_expr,
-                x0,
-                float(tolerancia),
-                int(max_iter),
-                angle_mode=st.session_state["angle_mode"],
-            )
+            resultado = metodo_punto_fijo(g_expr, x0, float(tolerancia), int(max_iter))
         except ValueError as exc:
             st.error(str(exc))
             return
@@ -242,14 +215,7 @@ def _panel_newton() -> None:
 
     if st.button("Resolver Newton", use_container_width=True):
         try:
-            resultado = newton_raphson(
-                f_expr,
-                df_expr,
-                x0,
-                float(tolerancia),
-                int(max_iter),
-                angle_mode=st.session_state["angle_mode"],
-            )
+            resultado = newton_raphson(f_expr, df_expr, x0, float(tolerancia), int(max_iter))
         except ValueError as exc:
             st.error(str(exc))
             return
@@ -334,9 +300,7 @@ def _panel_diferencia_central() -> None:
 
     if st.button("Derivar", use_container_width=True):
         try:
-            derivada = diferencia_central(
-                f_expr, x, float(h), angle_mode=st.session_state["angle_mode"]
-            )
+            derivada = diferencia_central(f_expr, x, float(h))
         except ValueError as exc:
             st.error(str(exc))
             return
@@ -344,9 +308,7 @@ def _panel_diferencia_central() -> None:
 
         try:
             xs = [x - 5 * float(h) + i * float(h) for i in range(11)]
-            ys = _eval_expr_points(
-                f_expr, xs, angle_mode=st.session_state["angle_mode"]
-            )
+            ys = _eval_expr_points(f_expr, xs)
             fig = go.Figure()
             fig.add_trace(go.Scatter(x=xs, y=ys, mode="lines+markers", name="f(x)"))
             fig.add_vline(x=x, line_dash="dash")
@@ -388,13 +350,7 @@ def _panel_aitken() -> None:
             )
         if st.button("Aplicar Aitken (punto fijo)", use_container_width=True):
             try:
-                resultado = aitken_desde_punto_fijo(
-                    g_expr,
-                    x0,
-                    float(tolerancia),
-                    int(max_iter),
-                    angle_mode=st.session_state["angle_mode"],
-                )
+                resultado = aitken_desde_punto_fijo(g_expr, x0, float(tolerancia), int(max_iter))
             except ValueError as exc:
                 st.error(str(exc))
                 return
@@ -435,14 +391,7 @@ def _panel_rk4() -> None:
 
     if st.button("Simular RK4", use_container_width=True):
         try:
-            trayectoria = runge_kutta_4(
-                ode_expr,
-                t0,
-                y0,
-                float(h),
-                int(pasos),
-                angle_mode=st.session_state["angle_mode"],
-            )
+            trayectoria = runge_kutta_4(ode_expr, t0, y0, float(h), int(pasos))
         except ValueError as exc:
             st.error(str(exc))
             return
@@ -490,37 +439,13 @@ def _panel_integracion() -> None:
             if metodo == "Trapecio compuesto":
                 integral = trapecio_compuesto(f_expr, a, b, int(n))
             elif metodo == "Simpson 1/3 compuesto":
-                integral = simpson_13_compuesto(
-                    f_expr,
-                    a,
-                    b,
-                    int(n),
-                    angle_mode=st.session_state["angle_mode"],
-                )
+                integral = simpson_13_compuesto(f_expr, a, b, int(n))
             elif metodo == "Simpson 3/8 compuesto":
-                integral = simpson_38_compuesto(
-                    f_expr,
-                    a,
-                    b,
-                    int(n),
-                    angle_mode=st.session_state["angle_mode"],
-                )
+                integral = simpson_38_compuesto(f_expr, a, b, int(n))
             elif metodo == "Rectangulo medio compuesto":
-                integral = rectangulo_medio_compuesto(
-                    f_expr,
-                    a,
-                    b,
-                    int(n),
-                    angle_mode=st.session_state["angle_mode"],
-                )
+                integral = rectangulo_medio_compuesto(f_expr, a, b, int(n))
             else:
-                integral = cuadratura_gauss_legendre(
-                    f_expr,
-                    a,
-                    b,
-                    int(n),
-                    angle_mode=st.session_state["angle_mode"],
-                )
+                integral = cuadratura_gauss_legendre(f_expr, a, b, int(n))
         except ValueError as exc:
             st.error(str(exc))
             return
@@ -530,13 +455,152 @@ def _panel_integracion() -> None:
         # Visualizacion del integrando en [a,b]
         try:
             xs = [a + (b - a) * i / 300 for i in range(301)]
-            ys = _eval_expr_points(
-                f_expr, xs, angle_mode=st.session_state["angle_mode"]
-            )
+            ys = _eval_expr_points(f_expr, xs)
             fig = go.Figure()
             fig.add_trace(go.Scatter(x=xs, y=ys, mode="lines", name="f(x)"))
             fig.add_hline(y=0, line_dash="dash")
             fig.update_layout(title="Integrando en [a,b]", xaxis_title="x", yaxis_title="f(x)")
+            st.plotly_chart(fig, use_container_width=True)
+        except Exception:
+            st.info("No se pudo graficar la funcion en el intervalo.")
+
+
+def _panel_montecarlo() -> None:
+    st.subheader("Integracion por Monte Carlo")
+    st.caption(
+        "Estimacion de integral definida con muestreo uniforme, error estandar e intervalo de confianza."
+    )
+
+    col1, col2 = st.columns(2)
+    with col1:
+        f_expr = st.text_input("f(x) Monte Carlo", value="exp(-x**2)")
+        a = st.number_input("Limite inferior a (MC)", value=0.0)
+        b = st.number_input("Limite superior b (MC)", value=1.0)
+    with col2:
+        n = st.number_input("Muestras n", min_value=100, value=10000, step=100)
+        confianza = st.selectbox("Nivel de confianza", [0.8, 0.9, 0.95, 0.99, 0.997], index=2)
+        seed_raw = st.text_input("Semilla aleatoria (opcional)", value="")
+
+    if st.button("Integrar con Monte Carlo", use_container_width=True):
+        seed = None
+        if seed_raw.strip():
+            try:
+                seed = int(seed_raw.strip())
+            except ValueError:
+                st.error("La semilla debe ser un entero.")
+                return
+
+        try:
+            resultado = integracion_montecarlo(
+                f_expr,
+                a,
+                b,
+                int(n),
+                float(confianza),
+                seed,
+            )
+        except ValueError as exc:
+            st.error(str(exc))
+            return
+
+        st.success(f"Integral estimada: {resultado.estimacion:.12f}")
+        st.markdown(
+            f"- Desvio muestral: `{resultado.desvio_muestral:.6e}`\n"
+            f"- Error estandar: `{resultado.error_estandar:.6e}`\n"
+            f"- IC {resultado.confianza*100:.1f}%: "
+            f"`[{resultado.ic_bajo:.12f}, {resultado.ic_alto:.12f}]`"
+        )
+
+        if resultado.muestras_transformadas:
+            valores = resultado.muestras_transformadas
+            fig_hist = go.Figure()
+            fig_hist.add_trace(
+                go.Histogram(
+                    x=valores,
+                    nbinsx=40,
+                    name="Muestras transformadas",
+                    marker_color="#4f81bd",
+                )
+            )
+            fig_hist.add_vline(x=resultado.estimacion, line_dash="dash", line_color="green")
+            fig_hist.update_layout(
+                title="Distribucion de aportes Monte Carlo",
+                xaxis_title="(b-a) * f(U(a,b))",
+                yaxis_title="Frecuencia",
+            )
+            st.plotly_chart(fig_hist, use_container_width=True)
+
+def _panel_montecarlo() -> None:
+    st.subheader("Integracion por Monte Carlo")
+    col1, col2 = st.columns(2)
+    with col1:
+        f_expr = st.text_input("f(x) Monte Carlo", value="sin(x)")
+        a = st.number_input("Limite inferior a (MC)", value=0.0)
+        b = st.number_input("Limite superior b (MC)", value=3.1415926536)
+        n = st.number_input("Muestras n", min_value=100, value=5000, step=100)
+    with col2:
+        confianza = st.selectbox(
+            "Nivel de confianza",
+            [0.8, 0.9, 0.95, 0.99, 0.997],
+            index=2,
+            format_func=lambda c: f"{c*100:.1f}%",
+        )
+        seed_str = st.text_input("Semilla aleatoria (opcional)", value="")
+        seed = int(seed_str) if seed_str.strip() else None
+
+    if st.button("Integrar con Monte Carlo", use_container_width=True):
+        try:
+            resultado = integracion_montecarlo(
+                f_expr,
+                float(a),
+                float(b),
+                int(n),
+                float(confianza),
+                seed,
+            )
+        except ValueError as exc:
+            st.error(str(exc))
+            return
+
+        st.success(f"Integral estimada: {resultado.estimacion:.12f}")
+        st.write(
+            f"IC {resultado.confianza*100:.1f}%: "
+            f"[{resultado.ic_bajo:.12f}, {resultado.ic_alto:.12f}]"
+        )
+        st.write(
+            f"Desvio muestral: {resultado.desvio_muestral:.6e} | "
+            f"Error estandar: {resultado.error_estandar:.6e}"
+        )
+
+        # Histograma de valores transformados area * f(x_i)
+        if resultado.muestras_transformadas:
+            fig_hist = go.Figure()
+            fig_hist.add_trace(
+                go.Histogram(
+                    x=resultado.muestras_transformadas,
+                    nbinsx=40,
+                    name="muestras transformadas",
+                )
+            )
+            fig_hist.update_layout(
+                title="Distribucion de muestras Monte Carlo",
+                xaxis_title="(b-a)*f(X)",
+                yaxis_title="Frecuencia",
+            )
+            st.plotly_chart(fig_hist, use_container_width=True)
+
+        # Integrando en [a,b]
+        try:
+            xs = [float(a) + (float(b) - float(a)) * i / 300 for i in range(301)]
+            ys = _eval_expr_points(f_expr, xs)
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=xs, y=ys, mode="lines", name="f(x)"))
+            fig.add_hline(y=0, line_dash="dash")
+            fig.update_layout(
+                title="Integrando para Monte Carlo",
+                xaxis_title="x",
+                yaxis_title="f(x)",
+            )
             st.plotly_chart(fig, use_container_width=True)
         except Exception:
             st.info("No se pudo graficar la funcion en el intervalo.")
@@ -572,6 +636,12 @@ _ATAJOS_EXPRESIONES = {
         ("exp(x)", "integral de e^x"),
         ("x**2*exp(x)", "integrando polinomio-exponencial"),
         ("1/(1+x**2)", "integrando racional"),
+    ],
+    "Monte Carlo": [
+        ("exp(-x**2)", "integral clasica en [0,1]"),
+        ("log(x)", "integral en [2,5]"),
+        ("sqrt(x)", "integral en [1,4]"),
+        ("sin(x)/x", "integral oscilatoria"),
     ],
 }
 
@@ -627,6 +697,7 @@ def main() -> None:
             "Aitken",
             "RK4",
             "Integracion Numerica",
+            "Monte Carlo",
             "Chuleta / Atajos",
         ],
     )
@@ -645,6 +716,8 @@ def main() -> None:
         _panel_aitken()
     elif opcion == "Integracion Numerica":
         _panel_integracion()
+    elif opcion == "Monte Carlo":
+        _panel_montecarlo()
     elif opcion == "Chuleta / Atajos":
         _panel_atajos()
     else:

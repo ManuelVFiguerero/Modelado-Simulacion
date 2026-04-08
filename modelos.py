@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import math
+import random
+from statistics import NormalDist
 from typing import Any, Dict, List, Mapping, Sequence, Tuple
 
 _ANGULAR_MODE = "radianes"
@@ -79,6 +81,18 @@ class AitkenResult:
     convergio: bool
     aproximacion: float
     pasos: List[AitkenStep]
+
+
+@dataclass
+class MonteCarloResult:
+    estimacion: float
+    desvio_muestral: float
+    error_estandar: float
+    ic_bajo: float
+    ic_alto: float
+    confianza: float
+    n: int
+    muestras_transformadas: List[float] | None = None
 
 
 def _normalizar_modo_angular(mode: str) -> str:
@@ -467,6 +481,67 @@ def gauss_legendre_cuadratura(
     return cuadratura_gauss_legendre(f_expr, a, b, orden)
 
 
+def integracion_montecarlo(
+    f_expr: str,
+    a: float,
+    b: float,
+    n: int,
+    confianza: float = 0.95,
+    seed: int | None = None,
+    angle_mode: str | None = None,
+) -> MonteCarloResult:
+    """Integra f(x) en [a,b] por Monte Carlo con IC normal."""
+    if b <= a:
+        raise ValueError("El intervalo debe cumplir a < b.")
+    if n < 2:
+        raise ValueError("n debe ser mayor o igual a 2.")
+    if not (0 < confianza < 1):
+        raise ValueError("La confianza debe estar entre 0 y 1.")
+
+    rng = random.Random(seed)
+    ancho = b - a
+    valores: List[float] = []
+    for _ in range(n):
+        x = rng.uniform(a, b)
+        valores.append(ancho * _evaluar_expresion(f_expr, angle_mode=angle_mode, x=x))
+
+    media = sum(valores) / n
+    var = sum((v - media) ** 2 for v in valores) / (n - 1)
+    desvio = math.sqrt(var)
+    error_estandar = desvio / math.sqrt(n)
+    z = NormalDist().inv_cdf(0.5 + confianza / 2.0)
+    margen = z * error_estandar
+
+    return MonteCarloResult(
+        estimacion=media,
+        desvio_muestral=desvio,
+        error_estandar=error_estandar,
+        ic_bajo=media - margen,
+        ic_alto=media + margen,
+        confianza=confianza,
+        n=n,
+        muestras_transformadas=valores,
+    )
+
+
+def intervalo_confianza_normal(
+    media: float,
+    desvio_muestral: float,
+    n: int,
+    confianza: float = 0.95,
+) -> Tuple[float, float]:
+    """Calcula intervalo de confianza normal para la media."""
+    if n < 2:
+        raise ValueError("n debe ser mayor o igual a 2 para intervalo de confianza.")
+    if not (0 < confianza < 1):
+        raise ValueError("La confianza debe estar entre 0 y 1.")
+
+    error_estandar = desvio_muestral / math.sqrt(n)
+    z = NormalDist().inv_cdf(0.5 + confianza / 2.0)
+    margen = z * error_estandar
+    return (media - margen, media + margen)
+
+
 def aitken_delta_cuadrado(secuencia: Sequence[float]) -> float:
     """Acelera una secuencia usando Delta-Cuadrado de Aitken."""
     if len(secuencia) < 3:
@@ -678,6 +753,17 @@ class MetodosNumericos:
         orden: int = 3,
     ) -> float:
         return cuadratura_gauss_legendre(f_expr, a, b, orden)
+
+    @staticmethod
+    def montecarlo(
+        f_expr: str,
+        a: float,
+        b: float,
+        n: int,
+        confianza: float = 0.95,
+        seed: int | None = None,
+    ) -> MonteCarloResult:
+        return integracion_montecarlo(f_expr, a, b, n, confianza, seed)
 
     @staticmethod
     def set_modo_angular(mode: str) -> None:
