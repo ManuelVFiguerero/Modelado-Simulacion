@@ -59,7 +59,10 @@ La web incluye:
 - interpolacion de Lagrange con nodos + curva interpolante,
 - trayectoria RK4 y modelo logistico,
 - comparacion visual de metodos de integracion numerica,
-- panel de **Integracion Monte Carlo** con estimacion e intervalo de confianza,
+- paneles de **Monte Carlo** para:
+  - integral simple,
+  - integral doble en rectangulos,
+  - aplicacion a trading (precio de call europea y VaR),
 - pagina "Chuleta / Atajos" con expresiones listas para copiar y pegar,
 - selector global de modo angular (**Radianes** o **Grados**) para funciones trigonometricas.
 

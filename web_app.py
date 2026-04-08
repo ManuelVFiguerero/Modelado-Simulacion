@@ -16,10 +16,11 @@ from modelos import (
     cuadratura_gauss_legendre,
     diferencia_central,
     evaluar_expresion,
-    get_angular_mode,
     integracion_montecarlo,
+    integracion_montecarlo_doble,
     interpolacion_lagrange,
     metodo_punto_fijo,
+    montecarlo_call_europea_y_var,
     newton_raphson,
     rectangulo_medio_compuesto,
     runge_kutta_4,
@@ -28,15 +29,6 @@ from modelos import (
     simpson_38_compuesto,
     trapecio_compuesto,
 )
-
-
-_Z_SCORES = {
-    0.8: 1.2815515655446004,
-    0.9: 1.6448536269514722,
-    0.95: 1.959963984540054,
-    0.99: 2.5758293035489004,
-    0.997: 2.9677379253417944,
-}
 
 
 def _eval_expr_points(expr: str, xs: List[float]) -> List[float]:
@@ -465,145 +457,384 @@ def _panel_integracion() -> None:
             st.info("No se pudo graficar la funcion en el intervalo.")
 
 
+def _mc_std_from_samples(samples: List[float]) -> float:
+    n = len(samples)
+    if n < 2:
+        return 0.0
+    media = sum(samples) / n
+    var = sum((v - media) ** 2 for v in samples) / (n - 1)
+    return math.sqrt(var)
+
+
+def _norm_cdf(x: float) -> float:
+    return 0.5 * (1.0 + math.erf(x / math.sqrt(2.0)))
+
+
+def _black_scholes_call(s0: float, k: float, r: float, sigma: float, t: float) -> float:
+    if t <= 0:
+        return max(s0 - k, 0.0)
+    if sigma <= 0:
+        return max(s0 - k * math.exp(-r * t), 0.0)
+    d1 = (math.log(s0 / k) + (r + 0.5 * sigma * sigma) * t) / (sigma * math.sqrt(t))
+    d2 = d1 - sigma * math.sqrt(t)
+    return s0 * _norm_cdf(d1) - k * math.exp(-r * t) * _norm_cdf(d2)
+
+
 def _panel_montecarlo() -> None:
-    st.subheader("Integracion por Monte Carlo")
+    st.subheader("Monte Carlo avanzado")
     st.caption(
-        "Estimacion de integral definida con muestreo uniforme, error estandar e intervalo de confianza."
+        "Incluye integral simple, integral doble y aplicacion financiera (pricing + riesgo)."
     )
 
-    col1, col2 = st.columns(2)
-    with col1:
-        f_expr = st.text_input("f(x) Monte Carlo", value="exp(-x**2)")
-        a = st.number_input("Limite inferior a (MC)", value=0.0)
-        b = st.number_input("Limite superior b (MC)", value=1.0)
-    with col2:
-        n = st.number_input("Muestras n", min_value=100, value=10000, step=100)
-        confianza = st.selectbox("Nivel de confianza", [0.8, 0.9, 0.95, 0.99, 0.997], index=2)
-        seed_raw = st.text_input("Semilla aleatoria (opcional)", value="")
+    modulo = st.radio(
+        "Selecciona modulo Monte Carlo",
+        [
+            "Integral simple (1D)",
+            "Integral doble (2D)",
+            "Trading: Call europea + VaR/ES",
+        ],
+        horizontal=True,
+    )
 
-    if st.button("Integrar con Monte Carlo", use_container_width=True):
-        seed = None
-        if seed_raw.strip():
+    if modulo == "Integral simple (1D)":
+        col1, col2 = st.columns(2)
+        with col1:
+            f_expr = st.text_input("f(x) (MC simple)", value="exp(-x**2)")
+            a = st.number_input("Limite inferior a", value=0.0, key="mc1_a")
+            b = st.number_input("Limite superior b", value=1.0, key="mc1_b")
+        with col2:
+            n = st.number_input("Muestras n", min_value=200, value=10000, step=200, key="mc1_n")
+            confianza = st.selectbox(
+                "Nivel de confianza",
+                [0.8, 0.9, 0.95, 0.99, 0.997],
+                index=2,
+                key="mc1_conf",
+            )
+            seed_raw = st.text_input("Semilla aleatoria (opcional)", value="", key="mc1_seed")
+
+        if st.button("Ejecutar Monte Carlo simple", use_container_width=True):
+            seed = None
+            if seed_raw.strip():
+                try:
+                    seed = int(seed_raw.strip())
+                except ValueError:
+                    st.error("La semilla debe ser un entero.")
+                    return
+
             try:
-                seed = int(seed_raw.strip())
-            except ValueError:
-                st.error("La semilla debe ser un entero.")
+                resultado = integracion_montecarlo(
+                    f_expr,
+                    float(a),
+                    float(b),
+                    int(n),
+                    float(confianza),
+                    seed,
+                )
+            except ValueError as exc:
+                st.error(str(exc))
                 return
 
-        try:
-            resultado = integracion_montecarlo(
-                f_expr,
-                a,
-                b,
-                int(n),
-                float(confianza),
-                seed,
+            st.success(f"Integral estimada: {resultado.estimacion:.12f}")
+            st.markdown(
+                f"- Varianza muestral: `{resultado.varianza_muestral:.6e}`\n"
+                f"- Desvio estandar muestral: `{resultado.desvio_muestral:.6e}`\n"
+                f"- Error estandar: `{resultado.error_estandar:.6e}`\n"
+                f"- IC {resultado.confianza*100:.1f}%: "
+                f"`[{resultado.ic_bajo:.12f}, {resultado.ic_alto:.12f}]`"
             )
-        except ValueError as exc:
-            st.error(str(exc))
-            return
 
-        st.success(f"Integral estimada: {resultado.estimacion:.12f}")
+            if resultado.muestras_transformadas:
+                fig_hist = go.Figure()
+                fig_hist.add_trace(
+                    go.Histogram(
+                        x=resultado.muestras_transformadas,
+                        nbinsx=45,
+                        name="Aportes",
+                        marker_color="#4f81bd",
+                        opacity=0.75,
+                    )
+                )
+                fig_hist.add_vline(
+                    x=resultado.estimacion,
+                    line_dash="dash",
+                    line_color="green",
+                    annotation_text="media",
+                )
+                fig_hist.update_layout(
+                    title="Distribucion de aportes MC (1D)",
+                    xaxis_title="(b-a) * f(U(a,b))",
+                    yaxis_title="Frecuencia",
+                    bargap=0.05,
+                )
+                st.plotly_chart(fig_hist, use_container_width=True)
+
+            try:
+                xs = [float(a) + (float(b) - float(a)) * i / 300 for i in range(301)]
+                ys = _eval_expr_points(f_expr, xs)
+                fig = go.Figure()
+                fig.add_trace(go.Scatter(x=xs, y=ys, mode="lines", name="f(x)"))
+                if resultado.x_muestras:
+                    ys_s = [float(evaluar_expresion(f_expr, x=xm)) for xm in resultado.x_muestras[:1500]]
+                    fig.add_trace(
+                        go.Scatter(
+                            x=resultado.x_muestras[:1500],
+                            y=ys_s,
+                            mode="markers",
+                            name="Muestras x",
+                            marker=dict(size=4, opacity=0.25, color="#d62728"),
+                        )
+                    )
+                fig.add_hline(y=0, line_dash="dash")
+                fig.update_layout(
+                    title="Integrando y muestreo Monte Carlo (1D)",
+                    xaxis_title="x",
+                    yaxis_title="f(x)",
+                )
+                st.plotly_chart(fig, use_container_width=True)
+            except Exception:
+                st.info("No se pudo graficar la funcion en el intervalo.")
+
+    elif modulo == "Integral doble (2D)":
+        col1, col2 = st.columns(2)
+        with col1:
+            f_expr = st.text_input("f(x, y) (MC doble)", value="x**2 + y**2")
+            ax = st.number_input("ax", value=0.0, key="mc2_ax")
+            bx = st.number_input("bx", value=1.0, key="mc2_bx")
+            ay = st.number_input("ay", value=0.0, key="mc2_ay")
+            by = st.number_input("by", value=1.0, key="mc2_by")
+        with col2:
+            n = st.number_input("Muestras n (2D)", min_value=300, value=15000, step=300, key="mc2_n")
+            confianza = st.selectbox(
+                "Nivel de confianza (2D)",
+                [0.8, 0.9, 0.95, 0.99, 0.997],
+                index=2,
+                key="mc2_conf",
+            )
+            seed_raw = st.text_input("Semilla aleatoria (opcional)", value="", key="mc2_seed")
+
+        if st.button("Ejecutar Monte Carlo doble", use_container_width=True):
+            seed = None
+            if seed_raw.strip():
+                try:
+                    seed = int(seed_raw.strip())
+                except ValueError:
+                    st.error("La semilla debe ser un entero.")
+                    return
+
+            try:
+                resultado = integracion_montecarlo_doble(
+                    f_expr=f_expr,
+                    ax=float(ax),
+                    bx=float(bx),
+                    ay=float(ay),
+                    by=float(by),
+                    n=int(n),
+                    confianza=float(confianza),
+                    seed=seed,
+                )
+            except ValueError as exc:
+                st.error(str(exc))
+                return
+
+            st.success(f"Integral doble estimada: {resultado.estimacion:.12f}")
+            st.markdown(
+                f"- Varianza muestral: `{resultado.varianza_muestral:.6e}`\n"
+                f"- Desvio estandar muestral: `{resultado.desvio_muestral:.6e}`\n"
+                f"- Error estandar: `{resultado.error_estandar:.6e}`\n"
+                f"- IC {resultado.confianza*100:.1f}%: "
+                f"`[{resultado.ic_bajo:.12f}, {resultado.ic_alto:.12f}]`"
+            )
+
+            if resultado.muestras_transformadas:
+                fig_hist = go.Figure()
+                fig_hist.add_trace(
+                    go.Histogram(
+                        x=resultado.muestras_transformadas,
+                        nbinsx=50,
+                        name="Aportes 2D",
+                        marker_color="#1f77b4",
+                        opacity=0.8,
+                    )
+                )
+                fig_hist.add_vline(
+                    x=resultado.estimacion,
+                    line_dash="dash",
+                    line_color="green",
+                    annotation_text="media",
+                )
+                fig_hist.update_layout(
+                    title="Distribucion de aportes MC (2D)",
+                    xaxis_title="Area * f(Ux, Uy)",
+                    yaxis_title="Frecuencia",
+                )
+                st.plotly_chart(fig_hist, use_container_width=True)
+
+            if resultado.x_muestras and resultado.y_muestras and resultado.fxy_muestras:
+                n_plot = min(2500, len(resultado.x_muestras))
+                fig_scatter = go.Figure()
+                fig_scatter.add_trace(
+                    go.Scattergl(
+                        x=resultado.x_muestras[:n_plot],
+                        y=resultado.y_muestras[:n_plot],
+                        mode="markers",
+                        marker=dict(
+                            size=5,
+                            color=resultado.fxy_muestras[:n_plot],
+                            colorscale="Viridis",
+                            showscale=True,
+                            colorbar=dict(title="f(x,y)"),
+                            opacity=0.7,
+                        ),
+                        name="Muestras (x,y)",
+                    )
+                )
+                fig_scatter.update_layout(
+                    title="Muestreo Monte Carlo en dominio 2D (color=f(x,y))",
+                    xaxis_title="x",
+                    yaxis_title="y",
+                )
+                st.plotly_chart(fig_scatter, use_container_width=True)
+
+    else:
         st.markdown(
-            f"- Desvio muestral: `{resultado.desvio_muestral:.6e}`\n"
-            f"- Error estandar: `{resultado.error_estandar:.6e}`\n"
-            f"- IC {resultado.confianza*100:.1f}%: "
-            f"`[{resultado.ic_bajo:.12f}, {resultado.ic_alto:.12f}]`"
+            "Aplicacion de Monte Carlo en finanzas: precio de **call europea** y "
+            "medidas de riesgo de una cartera (**VaR** y **Expected Shortfall**)."
         )
 
-        if resultado.muestras_transformadas:
-            valores = resultado.muestras_transformadas
-            fig_hist = go.Figure()
-            fig_hist.add_trace(
-                go.Histogram(
-                    x=valores,
-                    nbinsx=40,
-                    name="Muestras transformadas",
-                    marker_color="#4f81bd",
+        col1, col2 = st.columns(2)
+        with col1:
+            s0 = st.number_input("Precio spot S0", min_value=0.01, value=100.0, key="mct_s0")
+            k = st.number_input("Strike K", min_value=0.01, value=105.0, key="mct_k")
+            r = st.number_input("Tasa libre de riesgo anual r", value=0.03, format="%.6f", key="mct_r")
+            sigma = st.number_input("Volatilidad anual sigma", min_value=0.0, value=0.2, format="%.6f", key="mct_sigma")
+            t_years = st.number_input("Tiempo a vencimiento (anios)", min_value=0.0001, value=1.0, format="%.6f", key="mct_t")
+        with col2:
+            n_paths = st.number_input("Caminos Monte Carlo", min_value=1000, value=50000, step=1000, key="mct_n")
+            shares_qty = st.number_input("Cantidad de acciones", value=100.0, key="mct_shares")
+            calls_qty = st.number_input("Cantidad de calls", value=1.0, key="mct_calls")
+            confidence = st.selectbox("Nivel de confianza VaR/ES", [0.95, 0.99, 0.997], index=1, key="mct_conf")
+            horizon_days = st.number_input("Horizonte de riesgo (dias)", min_value=1, value=1, step=1, key="mct_h")
+            seed_raw = st.text_input("Semilla aleatoria (opcional)", value="", key="mct_seed")
+
+        if st.button("Simular pricing + riesgo (trading)", use_container_width=True):
+            seed = None
+            if seed_raw.strip():
+                try:
+                    seed = int(seed_raw.strip())
+                except ValueError:
+                    st.error("La semilla debe ser un entero.")
+                    return
+
+            try:
+                res = montecarlo_call_europea_y_var(
+                    s0=float(s0),
+                    k=float(k),
+                    r=float(r),
+                    sigma=float(sigma),
+                    t_years=float(t_years),
+                    n_paths=int(n_paths),
+                    shares_qty=float(shares_qty),
+                    calls_qty=float(calls_qty),
+                    confidence=float(confidence),
+                    horizon_days=int(horizon_days),
+                    seed=seed,
                 )
+            except ValueError as exc:
+                st.error(str(exc))
+                return
+
+            st.success("Simulacion Monte Carlo de trading completada")
+            st.markdown(
+                f"**Precio call (MC)**: `{res.precio_call_mc:.6f}`\n\n"
+                f"**Precio call (Black-Scholes)**: `{res.precio_call_bs:.6f}`\n\n"
+                f"**Varianza estimador call**: `{res.varianza_call:.6e}`\n\n"
+                f"**Desvio call**: `{res.desvio_call:.6e}`\n\n"
+                f"**Error estandar call**: `{res.error_estandar_call:.6e}`\n\n"
+                f"**IC call {res.confianza*100:.1f}%**: "
+                f"`[{res.ic_call_bajo:.6f}, {res.ic_call_alto:.6f}]`\n\n"
+                f"**VaR cartera ({res.confianza*100:.1f}%)**: `{res.var_portafolio:.6f}`\n\n"
+                f"**Expected Shortfall cartera**: `{res.es_portafolio:.6f}`\n\n"
+                f"**Horizonte**: `{res.horizonte_dias}` dia(s)"
             )
-            fig_hist.add_vline(x=resultado.estimacion, line_dash="dash", line_color="green")
-            fig_hist.update_layout(
-                title="Distribucion de aportes Monte Carlo",
-                xaxis_title="(b-a) * f(U(a,b))",
-                yaxis_title="Frecuencia",
-            )
-            st.plotly_chart(fig_hist, use_container_width=True)
 
-def _panel_montecarlo() -> None:
-    st.subheader("Integracion por Monte Carlo")
-    col1, col2 = st.columns(2)
-    with col1:
-        f_expr = st.text_input("f(x) Monte Carlo", value="sin(x)")
-        a = st.number_input("Limite inferior a (MC)", value=0.0)
-        b = st.number_input("Limite superior b (MC)", value=3.1415926536)
-        n = st.number_input("Muestras n", min_value=100, value=5000, step=100)
-    with col2:
-        confianza = st.selectbox(
-            "Nivel de confianza",
-            [0.8, 0.9, 0.95, 0.99, 0.997],
-            index=2,
-            format_func=lambda c: f"{c*100:.1f}%",
-        )
-        seed_str = st.text_input("Semilla aleatoria (opcional)", value="")
-        seed = int(seed_str) if seed_str.strip() else None
-
-    if st.button("Integrar con Monte Carlo", use_container_width=True):
-        try:
-            resultado = integracion_montecarlo(
-                f_expr,
-                float(a),
-                float(b),
-                int(n),
-                float(confianza),
-                seed,
-            )
-        except ValueError as exc:
-            st.error(str(exc))
-            return
-
-        st.success(f"Integral estimada: {resultado.estimacion:.12f}")
-        st.write(
-            f"IC {resultado.confianza*100:.1f}%: "
-            f"[{resultado.ic_bajo:.12f}, {resultado.ic_alto:.12f}]"
-        )
-        st.write(
-            f"Desvio muestral: {resultado.desvio_muestral:.6e} | "
-            f"Error estandar: {resultado.error_estandar:.6e}"
-        )
-
-        # Histograma de valores transformados area * f(x_i)
-        if resultado.muestras_transformadas:
-            fig_hist = go.Figure()
-            fig_hist.add_trace(
-                go.Histogram(
-                    x=resultado.muestras_transformadas,
-                    nbinsx=40,
-                    name="muestras transformadas",
+            if res.call_descuentos_muestras:
+                fig_call = go.Figure()
+                fig_call.add_trace(
+                    go.Histogram(
+                        x=res.call_descuentos_muestras,
+                        nbinsx=50,
+                        name="Payoff descontado call",
+                        marker_color="#2ca02c",
+                        opacity=0.8,
+                    )
                 )
-            )
-            fig_hist.update_layout(
-                title="Distribucion de muestras Monte Carlo",
-                xaxis_title="(b-a)*f(X)",
-                yaxis_title="Frecuencia",
-            )
-            st.plotly_chart(fig_hist, use_container_width=True)
+                fig_call.add_vline(
+                    x=res.precio_call_mc,
+                    line_dash="dash",
+                    line_color="green",
+                    annotation_text="Precio MC",
+                )
+                fig_call.add_vline(
+                    x=res.precio_call_bs,
+                    line_dash="dot",
+                    line_color="black",
+                    annotation_text="Precio BS",
+                )
+                fig_call.update_layout(
+                    title="Distribucion de payoff descontado de la call",
+                    xaxis_title="Payoff descontado",
+                    yaxis_title="Frecuencia",
+                )
+                st.plotly_chart(fig_call, use_container_width=True)
 
-        # Integrando en [a,b]
-        try:
-            xs = [float(a) + (float(b) - float(a)) * i / 300 for i in range(301)]
-            ys = _eval_expr_points(f_expr, xs)
-            fig = go.Figure()
-            fig.add_trace(go.Scatter(x=xs, y=ys, mode="lines", name="f(x)"))
-            fig.add_hline(y=0, line_dash="dash")
-            fig.update_layout(
-                title="Integrando para Monte Carlo",
-                xaxis_title="x",
-                yaxis_title="f(x)",
-            )
-            st.plotly_chart(fig, use_container_width=True)
-        except Exception:
-            st.info("No se pudo graficar la funcion en el intervalo.")
+            if res.perdidas_muestras and res.pnl_muestras:
+                fig_loss = go.Figure()
+                fig_loss.add_trace(
+                    go.Histogram(
+                        x=res.perdidas_muestras,
+                        nbinsx=60,
+                        name="Perdidas",
+                        marker_color="#d62728",
+                        opacity=0.75,
+                    )
+                )
+                fig_loss.add_vline(
+                    x=res.var_portafolio,
+                    line_dash="dash",
+                    line_color="red",
+                    annotation_text="VaR",
+                )
+                fig_loss.add_vline(
+                    x=res.es_portafolio,
+                    line_dash="dot",
+                    line_color="orange",
+                    annotation_text="ES",
+                )
+                fig_loss.update_layout(
+                    title="Distribucion de perdidas de cartera (horizonte corto)",
+                    xaxis_title="Perdida",
+                    yaxis_title="Frecuencia",
+                )
+                st.plotly_chart(fig_loss, use_container_width=True)
+
+                pnl_ordenado = sorted(res.pnl_muestras)
+                n_plot = min(3000, len(pnl_ordenado))
+                pnl_plot = pnl_ordenado[:n_plot]
+                fig_tail = go.Figure()
+                fig_tail.add_trace(
+                    go.Scatter(
+                        x=list(range(1, len(pnl_plot) + 1)),
+                        y=pnl_plot,
+                        mode="lines",
+                        name="P&L ordenado (cola izquierda)",
+                    )
+                )
+                fig_tail.update_layout(
+                    title="Cola de riesgo de P&L (ordenado)",
+                    xaxis_title="Orden de escenario",
+                    yaxis_title="P&L",
+                )
+                st.plotly_chart(fig_tail, use_container_width=True)
 
 
 _ATAJOS_EXPRESIONES = {
