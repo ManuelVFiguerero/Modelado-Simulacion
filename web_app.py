@@ -234,8 +234,8 @@ def _resolver_integracion_con_error(
     a: float,
     b: float,
     n: int,
-    e: float,
-) -> tuple[float, float, float, bool]:
+    xi: float,
+) -> tuple[float, float, float, int, float, float]:
     mapa = {
         "Trapecio compuesto": "trapecio",
         "Simpson 1/3 compuesto": "simpson13",
@@ -250,7 +250,7 @@ def _resolver_integracion_con_error(
         b=float(b),
         n=int(n),
         metodo=clave,
-        e=float(e),
+        xi=float(xi),
     )
 
 
@@ -1041,35 +1041,44 @@ def _panel_integracion() -> None:
     with col2:
         n_default = 6 if "3/8" in metodo else 4
         n = st.number_input("Subintervalos / puntos n", min_value=1, value=n_default, step=1)
-        e = st.number_input(
-            "Error de truncamiento objetivo e",
-            min_value=1e-12,
-            value=1e-6,
+        xi_default = float((float(a) + float(b)) / 2.0)
+        xi = st.number_input(
+            "Punto xi para derivada n-esima del error",
+            value=xi_default,
             format="%.12f",
         )
 
     if st.button("Integrar", use_container_width=True):
         try:
-            integral_base, error_trunc, integral_ref, cumple_e = _resolver_integracion_con_error(
+            (
+                integral_base,
+                error_trunc,
+                integral_ref,
+                orden_der,
+                valor_der,
+                xi_usado,
+            ) = _resolver_integracion_con_error(
                 metodo=metodo,
                 f_expr=f_expr,
                 a=float(a),
                 b=float(b),
                 n=int(n),
-                e=float(e),
+                xi=float(xi),
             )
         except ValueError as exc:
             st.error(str(exc))
             return
 
-        estado = "cumple e" if cumple_e else "no cumple e"
         st.success(f"Integral base: {_fmt10(integral_base)}")
         st.caption(
-            f"Error truncamiento estimado={_fmt10(error_trunc)} | "
-            f"e={_fmt10(float(e))} | Estado: {estado}"
+            f"Error truncamiento teorico={_fmt10(error_trunc)} | "
+            f"|E_T|={_fmt10(abs(error_trunc))}"
         )
         st.caption(
-            f"Integral refinada (solo para estimar error): {_fmt10(integral_ref)}"
+            f"Derivada usada: orden {orden_der}, f^({orden_der})(xi)={_fmt10(valor_der)}, xi={_fmt10(xi_usado)}"
+        )
+        st.caption(
+            f"Integral refinada (solo referencia numerica): {_fmt10(integral_ref)}"
         )
 
         # Visualizacion del integrando en [a,b]

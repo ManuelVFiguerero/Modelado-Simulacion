@@ -7,8 +7,28 @@ import math
 import random
 from statistics import NormalDist
 from typing import Any, Dict, List, Mapping, Sequence, Tuple
+import sympy as sp
 
 _ANGULAR_MODE = "radianes"
+_SYMPY_X = sp.symbols("x", real=True)
+_SYMPY_LOCALS = {
+    "x": _SYMPY_X,
+    "pi": sp.pi,
+    "e": sp.E,
+    "sin": sp.sin,
+    "cos": sp.cos,
+    "tan": sp.tan,
+    "asin": sp.asin,
+    "acos": sp.acos,
+    "atan": sp.atan,
+    "sinh": sp.sinh,
+    "cosh": sp.cosh,
+    "tanh": sp.tanh,
+    "exp": sp.exp,
+    "log": sp.log,
+    "sqrt": sp.sqrt,
+    "abs": sp.Abs,
+}
 
 
 @dataclass
@@ -508,61 +528,143 @@ def cuadratura_gauss_legendre(
     return c1 * math.fsum(terminos)
 
 
+def derivada_n_valor_expresion(f_expr: str, orden: int, xi: float) -> float:
+    """Calcula f^(orden)(xi) usando derivacion simbolica (Sympy)."""
+    if orden < 0:
+        raise ValueError("El orden de derivada debe ser >= 0.")
+    try:
+        f_sym = sp.sympify(f_expr, locals=_SYMPY_LOCALS)
+    except Exception as exc:  # noqa: BLE001
+        raise ValueError(f"No se pudo interpretar la expresion para derivar: {exc}") from exc
+
+    try:
+        derivada = sp.diff(f_sym, _SYMPY_X, orden).subs(_SYMPY_X, xi).evalf()
+    except Exception as exc:  # noqa: BLE001
+        raise ValueError(f"No se pudo evaluar la derivada de orden {orden} en xi={xi}.") from exc
+
+    derivada_c = complex(derivada)
+    if not math.isfinite(derivada_c.real) or not math.isfinite(derivada_c.imag):
+        raise ValueError("La derivada evaluada en xi no es finita.")
+    if abs(derivada_c.imag) > 1e-12:
+        raise ValueError("La derivada evaluada en xi no es real.")
+    return float(derivada_c.real)
+
+
+def _error_truncamiento_teorico(
+    f_expr: str,
+    a: float,
+    b: float,
+    n: int,
+    metodo_norm: str,
+    xi: float,
+) -> tuple[float, int, float]:
+    """Estima error de truncamiento teorico evaluando f^(m)(xi)."""
+    h = (b - a) / n
+
+    if metodo_norm == "trapecio":
+        orden_der = 2
+        derivada = derivada_n_valor_expresion(f_expr, orden_der, xi)
+        error = -((b - a) / 12.0) * (h**2) * derivada
+        return error, orden_der, derivada
+
+    if metodo_norm == "simpson13":
+        orden_der = 4
+        derivada = derivada_n_valor_expresion(f_expr, orden_der, xi)
+        error = -((b - a) / 180.0) * (h**4) * derivada
+        return error, orden_der, derivada
+
+    if metodo_norm == "simpson38":
+        orden_der = 4
+        derivada = derivada_n_valor_expresion(f_expr, orden_der, xi)
+        error = -((b - a) / 80.0) * (h**4) * derivada
+        return error, orden_der, derivada
+
+    if metodo_norm == "rectangulo_medio":
+        orden_der = 2
+        derivada = derivada_n_valor_expresion(f_expr, orden_der, xi)
+        error = -((b - a) / 24.0) * (h**2) * derivada
+        return error, orden_der, derivada
+
+    if metodo_norm == "gauss":
+        orden_der = 2 * n
+        derivada = derivada_n_valor_expresion(f_expr, orden_der, xi)
+        numerador = ((b - a) ** (2 * n + 1)) * (math.factorial(n) ** 4)
+        denominador = (2 * n + 1) * (math.factorial(2 * n) ** 3)
+        error = (numerador / denominador) * derivada
+        return error, orden_der, derivada
+
+    raise ValueError("Metodo de integracion no soportado para error teorico.")
+
+
 def integracion_con_error_truncamiento(
     f_expr: str,
     a: float,
     b: float,
     n: int,
     metodo: str,
-    e: float,
-) -> tuple[float, float, float, bool]:
-    """Calcula integral base y estima error de truncamiento.
+    xi: float | None = None,
+) -> tuple[float, float, float, int, float, float]:
+    """Calcula integral base y error de truncamiento teorico en xi.
 
     Retorna:
     - integral_base (n original)
-    - error_truncamiento_estimado
+    - error_truncamiento_estimado_teorico (puede ser signed)
     - integral_refinada (malla refinada u orden mayor, solo para estimar error)
-    - cumple_tolerancia (error_estimado <= e)
+    - orden de derivada usada
+    - valor de f^(orden)(xi)
+    - xi usado
     """
-    if e <= 0:
-        raise ValueError("El parametro e debe ser mayor a cero.")
+    if b <= a:
+        raise ValueError("El intervalo debe cumplir a < b.")
+    if n < 1:
+        raise ValueError("n debe ser mayor o igual a 1.")
     metodo_norm = metodo.strip().lower()
+    xi_eval = (a + b) / 2.0 if xi is None else float(xi)
+    if xi_eval < a or xi_eval > b:
+        raise ValueError("xi debe pertenecer al intervalo [a, b].")
 
     if metodo_norm == "trapecio":
         base = trapecio_compuesto(f_expr, a, b, n)
         refinada = trapecio_compuesto(f_expr, a, b, 2 * n)
-        p = 2
-        error_estimado = abs((refinada - base) / (2**p - 1))
-        return base, error_estimado, refinada, error_estimado <= e
+        error, orden_der, derivada = _error_truncamiento_teorico(
+            f_expr, a, b, n, metodo_norm, xi_eval
+        )
+        return base, error, refinada, orden_der, derivada, xi_eval
 
     if metodo_norm == "simpson13":
         base = simpson_13_compuesto(f_expr, a, b, n)
         refinada = simpson_13_compuesto(f_expr, a, b, 2 * n)
-        p = 4
-        error_estimado = abs((refinada - base) / (2**p - 1))
-        return base, error_estimado, refinada, error_estimado <= e
+        error, orden_der, derivada = _error_truncamiento_teorico(
+            f_expr, a, b, n, metodo_norm, xi_eval
+        )
+        return base, error, refinada, orden_der, derivada, xi_eval
 
     if metodo_norm == "simpson38":
         base = simpson_38_compuesto(f_expr, a, b, n)
         refinada = simpson_38_compuesto(f_expr, a, b, 2 * n)
-        p = 4
-        error_estimado = abs((refinada - base) / (2**p - 1))
-        return base, error_estimado, refinada, error_estimado <= e
+        error, orden_der, derivada = _error_truncamiento_teorico(
+            f_expr, a, b, n, metodo_norm, xi_eval
+        )
+        return base, error, refinada, orden_der, derivada, xi_eval
 
     if metodo_norm == "rectangulo_medio":
         base = rectangulo_medio_compuesto(f_expr, a, b, n)
         refinada = rectangulo_medio_compuesto(f_expr, a, b, 2 * n)
-        p = 2
-        error_estimado = abs((refinada - base) / (2**p - 1))
-        return base, error_estimado, refinada, error_estimado <= e
+        error, orden_der, derivada = _error_truncamiento_teorico(
+            f_expr, a, b, n, metodo_norm, xi_eval
+        )
+        return base, error, refinada, orden_der, derivada, xi_eval
 
     if metodo_norm == "gauss":
         base = cuadratura_gauss_legendre(f_expr, a, b, n)
         if n < 5:
             refinada = cuadratura_gauss_legendre(f_expr, a, b, n + 1)
-            error = abs(refinada - base)
-            return base, error, refinada, error <= e
-        return base, 0.0, base, True
+        else:
+            refinada = base
+        error, orden_der, derivada = _error_truncamiento_teorico(
+            f_expr, a, b, n, metodo_norm, xi_eval
+        )
+        return base, error, refinada, orden_der, derivada, xi_eval
 
     raise ValueError("Metodo de integracion no soportado para estimacion de error.")
 

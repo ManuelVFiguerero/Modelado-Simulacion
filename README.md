@@ -66,7 +66,7 @@ La web incluye:
 - interpolacion de Lagrange con nodos, curva interpolante y aportes por nodo,
 - trayectoria de EDO con Euler, Euler mejorado o RK4 + comparativa entre los 3 metodos,
 - comparacion visual de metodos de integracion numerica + integral acumulada,
-- estimacion de error de truncamiento configurable por parametro `e` en integracion,
+- estimacion teorica de error de truncamiento por derivada n-esima en un punto `xi`,
 - paneles de **Monte Carlo** para:
   - integral simple,
   - integral doble en rectangulos,
@@ -110,8 +110,8 @@ Incluye presets para:
 - Diferencias centrales (funcion, punto y h).
 - Euler, Euler mejorado y RK4 para EDOs de valor inicial.
 - Integracion numerica para ejercicios de Newton-Cotes y Gauss.
-  Incluye estimacion de error de truncamiento con parametro `e` y reporte de
-  cumplimiento `error <= e`, manteniendo como salida principal la integral base.
+  Incluye estimacion teorica del error de truncamiento usando la derivada n-esima
+  evaluada en un punto `xi` ingresado por el usuario.
   Ahora tambien muestra **tablas de aportes** por metodo en modo guiado.
 
 Esto permite elegir un ejercicio y cambiar solo tolerancia/iteraciones cuando haga falta.
@@ -129,6 +129,8 @@ Esto permite elegir un ejercicio y cambiar solo tolerancia/iteraciones cuando ha
   - evaluaciones `f(x)`,
   - coeficientes/pesos,
   - aporte parcial de cada termino.
+- En integracion numerica, el error de truncamiento se calcula en forma teorica
+  con formulas del metodo y derivada n-esima en `xi` (ingresado por parametro).
 - En **Aitken desde punto fijo**, se solicita un compacto `[a,b]` y se valida:
   - autocontencion `g([a,b]) subset [a,b]`,
   - cota Lipschitz estimada `L < 1` (contraccion).

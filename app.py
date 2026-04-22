@@ -195,10 +195,14 @@ def _tabla_detalle_integracion(
 
 
 def _mostrar_resultado_integracion(
-    opcion: int, f_expr: str, a: float, b: float, n: int, e: float, mostrar_tabla: bool
+    opcion: int,
+    f_expr: str,
+    a: float,
+    b: float,
+    n: int,
+    xi: float,
+    mostrar_tabla: bool,
 ) -> None:
-    if e <= 0:
-        raise ValueError("e debe ser mayor a cero.")
     metodo_mapa = {
         1: "trapecio",
         2: "simpson13",
@@ -209,22 +213,30 @@ def _mostrar_resultado_integracion(
     if opcion not in metodo_mapa:
         raise ValueError("Metodo de integracion invalido.")
 
-    integral_base, error_trunc, integral_ref, cumple_tolerancia = (
+    (
+        integral_base,
+        error_trunc,
+        integral_ref,
+        orden_der,
+        derivada_en_xi,
+        xi_usado,
+    ) = (
         integracion_con_error_truncamiento(
             f_expr,
             a,
             b,
             n,
             metodo_mapa[opcion],
-            e,
+            xi,
         )
     )
     print(f"\nIntegral base: {_fmt10(integral_base)}")
-    print(f"Error de truncamiento estimado: {_fmt10(error_trunc)}")
-    print(f"e objetivo: {_fmt10(e)}")
-    print(f"Cumple error <= e: {'SI' if cumple_tolerancia else 'NO'}")
+    print(f"Error de truncamiento teorico (en xi): {_fmt10(error_trunc)}")
+    print(f"xi usado para derivada n-esima: {_fmt10(xi_usado)}")
+    print(f"Orden de derivada usado: {orden_der}")
+    print(f"f^({orden_der})(xi) = {_fmt10(derivada_en_xi)}")
     print(
-        f"Integral refinada (solo para estimar error): {_fmt10(integral_ref)}"
+        f"Integral refinada (solo referencia numerica): {_fmt10(integral_ref)}"
     )
 
     if not mostrar_tabla:
@@ -233,6 +245,9 @@ def _mostrar_resultado_integracion(
     nombre, columnas, filas = _tabla_detalle_integracion(opcion, f_expr, a, b, n)
     print(f"\nTabla de aportes - {nombre}:")
     _imprimir_tabla(columnas, filas)
+
+
+
 def leer_float(mensaje: str) -> float:
     while True:
         valor = input(mensaje).strip()
@@ -512,7 +527,7 @@ def ejecutar_integracion_numerica() -> None:
     a = leer_float("Limite inferior a: ")
     b = leer_float("Limite superior b: ")
     n = leer_int("Subintervalos / orden n: ", minimo=1)
-    e = leer_float("Error de truncamiento objetivo e (>0): ")
+    xi = leer_float("Punto xi para evaluar derivada n-esima del error: ")
     mostrar_tabla_txt = input(
         "Mostrar tabla detallada de integracion? [S/n]: "
     ).strip().lower()
@@ -525,7 +540,7 @@ def ejecutar_integracion_numerica() -> None:
             a=a,
             b=b,
             n=n,
-            e=e,
+            xi=xi,
             mostrar_tabla=mostrar_tabla,
         )
     except ValueError as exc:
@@ -603,7 +618,7 @@ _RK4_PRESETS = {
 }
 
 _INTEGRACION_PRESETS = {
-    1: ("Trapecio: sin(x) en [0,pi], n=8", 1, "sin(x)", 0.0, math.pi, 8, 1e-5),
+    1: ("Trapecio: sin(x) en [0,pi], n=8", 1, "sin(x)", 0.0, math.pi, 8, math.pi / 2.0),
     2: (
         "Simpson 1/3: exp(-x**2) en [0,1], n=10",
         2,
@@ -611,7 +626,7 @@ _INTEGRACION_PRESETS = {
         0.0,
         1.0,
         10,
-        1e-6,
+        0.5,
     ),
     3: (
         "Simpson 3/8: x**3 + 2*x en [0,1], n=6",
@@ -620,7 +635,7 @@ _INTEGRACION_PRESETS = {
         0.0,
         1.0,
         6,
-        1e-8,
+        0.5,
     ),
     4: (
         "Rectangulo medio: log(x+1) en [0,1], n=8",
@@ -629,7 +644,7 @@ _INTEGRACION_PRESETS = {
         0.0,
         1.0,
         8,
-        1e-5,
+        0.5,
     ),
     5: (
         "Gauss-Legendre: exp(-x**2) en [0,1], orden=3",
@@ -638,7 +653,7 @@ _INTEGRACION_PRESETS = {
         0.0,
         1.0,
         3,
-        1e-6,
+        0.5,
     ),
 }
 
@@ -880,10 +895,12 @@ def _ejercicio_integracion() -> None:
         a,
         b,
         n_default,
-        e_default,
+        xi_default,
     ) = seleccionado
     n = leer_int_opcional(f"Subintervalos / orden n (Enter={n_default}): ", n_default)
-    e = leer_float_opcional(f"Error objetivo e (Enter={e_default}): ", e_default)
+    xi = leer_float_opcional(
+        f"Punto xi para derivada n-esima (Enter={xi_default}): ", xi_default
+    )
 
     try:
         _mostrar_resultado_integracion(
@@ -892,7 +909,7 @@ def _ejercicio_integracion() -> None:
             a=a,
             b=b,
             n=n,
-            e=e,
+            xi=xi,
             mostrar_tabla=True,
         )
     except ValueError as exc:
