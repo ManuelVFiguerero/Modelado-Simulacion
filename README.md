@@ -14,7 +14,9 @@ Pequena aplicacion en Python para simular y resolver modelos matematicos desde c
 - **Derivacion numerica por diferencia central**.
 
 ### 3) Aceleracion de convergencia
-- **Delta-Cuadrado de Aitken** (usa los ultimos 3 terminos de una secuencia).
+- **Delta-Cuadrado de Aitken**:
+  - modo secuencia manual (usa los ultimos 3 terminos),
+  - modo desde punto fijo con verificacion numerica de hipotesis en compacto.
 
 ### 4) Simulacion de evolucion (EDO)
 - **Euler explicito** para `y' = f(t, y)`.
@@ -118,5 +120,8 @@ Esto permite elegir un ejercicio y cambiar solo tolerancia/iteraciones cuando ha
   - Raices e interpolacion: `x`
   - EDO (Euler/Euler mejorado/RK4): `t` y `y`
 - En Lagrange, los valores de `x` de los puntos deben ser distintos.
+- En **Aitken desde punto fijo**, se solicita un compacto `[a,b]` y se valida:
+  - autocontencion `g([a,b]) subset [a,b]`,
+  - cota Lipschitz estimada `L < 1` (contraccion).
 - Formato de salida: la app muestra resultados con **6 decimales por truncado**
   (sin redondeo visual), manteniendo calculo interno en precision completa.

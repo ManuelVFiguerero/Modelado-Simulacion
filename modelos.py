@@ -841,17 +841,104 @@ def aitken_delta_cuadrado(secuencia: Sequence[float]) -> float:
     return x0 - ((x1 - x0) ** 2) / denominador
 
 
+def _estimar_lipschitz_en_compacto(
+    g_expr: str,
+    a: float,
+    b: float,
+    muestras: int = 200,
+) -> tuple[float, float, float]:
+    """Estima una cota de Lipschitz de g en [a,b] usando una malla uniforme."""
+    if a >= b:
+        raise ValueError("El compacto debe cumplir a < b.")
+    if muestras < 20:
+        raise ValueError("muestras debe ser al menos 20 para estimar Lipschitz.")
+
+    xs = [a + (b - a) * i / muestras for i in range(muestras + 1)]
+    ys = [_evaluar_expresion(g_expr, x=x) for x in xs]
+
+    for valor in ys:
+        if not math.isfinite(valor):
+            raise ValueError("g(x) produjo valores no finitos en el compacto.")
+
+    lipschitz = 0.0
+    for i in range(muestras):
+        dx = xs[i + 1] - xs[i]
+        pendiente = abs((ys[i + 1] - ys[i]) / dx)
+        lipschitz = max(lipschitz, pendiente)
+
+    return lipschitz, min(ys), max(ys)
+
+
+def verificar_lipschitz_compacto(
+    g_expr: str,
+    a: float,
+    b: float,
+    muestras: int = 200,
+    umbral: float = 1.0,
+) -> float:
+    """Verifica en forma numerica condicion Lipschitz/contraccion en [a,b].
+
+    Requiere:
+    - g([a,b]) subset [a,b] (autocontenido)
+    - constante de Lipschitz estimada L < umbral (por defecto umbral=1)
+    """
+    if umbral <= 0:
+        raise ValueError("El umbral de Lipschitz debe ser mayor a cero.")
+
+    lipschitz, g_min, g_max = _estimar_lipschitz_en_compacto(
+        g_expr=g_expr,
+        a=a,
+        b=b,
+        muestras=muestras,
+    )
+    tol = 1e-9
+    if g_min < a - tol or g_max > b + tol:
+        raise ValueError(
+            "No se cumple autocontencion en el compacto: g([a,b]) no esta dentro de [a,b]."
+        )
+    if lipschitz >= umbral:
+        raise ValueError(
+            "No se cumple condicion de Lipschitz contractiva en el compacto: "
+            f"L estimada={lipschitz:.6f} >= {umbral:.6f}."
+        )
+    return lipschitz
+
+
 def aitken_desde_punto_fijo(
     g_expr: str,
     x0: float,
     tolerancia: float = 1e-6,
     max_iter: int = 100,
+    a_compacto: float | None = None,
+    b_compacto: float | None = None,
+    muestras_lipschitz: int = 200,
 ) -> AitkenResult:
-    """Aplica Aitken Delta-Cuadrado sobre una secuencia de punto fijo."""
+    """Aplica Aitken Delta-Cuadrado sobre una secuencia de punto fijo.
+
+    Para validez teorica, verifica numericamente en un compacto [a,b]:
+    - autocontencion g([a,b]) subset [a,b]
+    - contraccion Lipschitz L < 1
+    """
     if tolerancia <= 0:
         raise ValueError("La tolerancia debe ser mayor a cero.")
     if max_iter <= 0:
         raise ValueError("max_iter debe ser mayor a cero.")
+    if a_compacto is None or b_compacto is None:
+        raise ValueError(
+            "Debes definir un compacto [a,b] para verificar Lipschitz antes de Aitken."
+        )
+    if a_compacto >= b_compacto:
+        raise ValueError("El compacto debe cumplir a < b.")
+    if not (a_compacto <= x0 <= b_compacto):
+        raise ValueError("x0 debe pertenecer al compacto [a,b].")
+
+    verificar_lipschitz_compacto(
+        g_expr=g_expr,
+        a=a_compacto,
+        b=b_compacto,
+        muestras=muestras_lipschitz,
+        umbral=1.0,
+    )
 
     pasos: List[AitkenStep] = []
     xn = x0
@@ -860,6 +947,10 @@ def aitken_desde_punto_fijo(
     for iteracion in range(1, max_iter + 1):
         xn1 = _evaluar_expresion(g_expr, x=xn)
         xn2 = _evaluar_expresion(g_expr, x=xn1)
+        if not (a_compacto <= xn1 <= b_compacto and a_compacto <= xn2 <= b_compacto):
+            raise ValueError(
+                "La iteracion de punto fijo salio del compacto [a,b]."
+            )
         denominador = xn2 - 2.0 * xn1 + xn
         if abs(denominador) < 1e-14:
             raise ValueError(
@@ -868,6 +959,8 @@ def aitken_desde_punto_fijo(
             )
 
         x_aitken = xn - ((xn1 - xn) ** 2) / denominador
+        if not (a_compacto <= x_aitken <= b_compacto):
+            raise ValueError("La aceleracion de Aitken salio del compacto [a,b].")
         if x_aitken_anterior is None:
             error = abs(x_aitken - xn)
         else:
@@ -1044,9 +1137,23 @@ class MetodosNumericos:
 
     @staticmethod
     def aitken_punto_fijo(
-        g_expr: str, x0: float, tolerancia: float = 1e-6, max_iter: int = 100
+        g_expr: str,
+        x0: float,
+        tolerancia: float = 1e-6,
+        max_iter: int = 100,
+        a_compacto: float | None = None,
+        b_compacto: float | None = None,
+        muestras_lipschitz: int = 200,
     ) -> AitkenResult:
-        return aitken_desde_punto_fijo(g_expr, x0, tolerancia, max_iter)
+        return aitken_desde_punto_fijo(
+            g_expr,
+            x0,
+            tolerancia,
+            max_iter,
+            a_compacto=a_compacto,
+            b_compacto=b_compacto,
+            muestras_lipschitz=muestras_lipschitz,
+        )
 
     @staticmethod
     def runge_kutta_4(
