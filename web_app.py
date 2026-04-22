@@ -59,6 +59,24 @@ def _row_fmt6(fila: dict) -> dict:
     return nueva
 
 
+def _tabla_display_fmt6(tabla: List[dict]) -> List[dict]:
+    """Prepara filas para st.dataframe con 6 decimales fijos sin redondeo."""
+    salida: List[dict] = []
+    for fila in tabla:
+        nueva: dict = {}
+        for clave, valor in fila.items():
+            if isinstance(valor, float):
+                nueva[clave] = _fmt6(valor)
+            else:
+                nueva[clave] = valor
+        salida.append(nueva)
+    return salida
+
+
+def _mostrar_tabla_fmt6(tabla: List[dict]) -> None:
+    st.dataframe(_tabla_display_fmt6(tabla), use_container_width=True)
+
+
 def _normal_ajustada(samples: List[float], puntos: int = 240) -> tuple[List[float], List[float], float, float] | None:
     if len(samples) < 2:
         return None
@@ -289,7 +307,7 @@ def _panel_biseccion() -> None:
         )
         if resultado.pasos:
             tabla = [_row_fmt6(asdict(p)) for p in resultado.pasos]
-            st.dataframe(tabla, use_container_width=True)
+            _mostrar_tabla_fmt6(tabla)
 
             fig_conv = go.Figure()
             fig_conv.add_trace(
@@ -372,7 +390,7 @@ def _panel_punto_fijo() -> None:
             f"Aprox raiz: {_fmt6(resultado.aproximacion)} | convergio={resultado.convergio}"
         )
         tabla = [_row_fmt6(asdict(p)) for p in resultado.pasos]
-        st.dataframe(tabla, use_container_width=True)
+        _mostrar_tabla_fmt6(tabla)
 
         fig_err = go.Figure()
         fig_err.add_trace(
@@ -434,7 +452,7 @@ def _panel_newton() -> None:
             f"Aprox raiz: {_fmt6(resultado.aproximacion)} | convergio={resultado.convergio}"
         )
         tabla = [_row_fmt6(asdict(p)) for p in resultado.pasos]
-        st.dataframe(tabla, use_container_width=True)
+        _mostrar_tabla_fmt6(tabla)
 
         fig_err = go.Figure()
         fig_err.add_trace(
@@ -794,7 +812,7 @@ def _panel_aitken() -> None:
                 f"| convergio={resultado.convergio}"
             )
             tabla = [_row_fmt6(asdict(p)) for p in resultado.pasos]
-            st.dataframe(tabla, use_container_width=True)
+            _mostrar_tabla_fmt6(tabla)
 
             fig = go.Figure()
             fig.add_trace(
@@ -864,7 +882,7 @@ def _panel_edo() -> None:
             st.error(str(exc))
             return
         tabla = [_row_fmt6(asdict(p)) for p in trayectoria]
-        st.dataframe(tabla, use_container_width=True)
+        _mostrar_tabla_fmt6(tabla)
 
         fig = go.Figure()
         fig.add_trace(
