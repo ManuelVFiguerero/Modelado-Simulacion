@@ -31,6 +31,7 @@ from modelos import (
     simpson_13_compuesto,
     simpson_38_compuesto,
     trapecio_compuesto,
+    verificar_lipschitz_compacto,
 )
 
 
@@ -790,6 +791,8 @@ def _panel_aitken() -> None:
         with col1:
             g_expr = st.text_input("g(x) Aitken", value="exp(-x)")
             x0 = st.number_input("x0 Aitken", value=1.0)
+            a_compacto = st.number_input("Compacto a", value=float(x0) - 1.0, key="aitken_a")
+            b_compacto = st.number_input("Compacto b", value=float(x0) + 1.0, key="aitken_b")
         with col2:
             tolerancia = st.number_input(
                 "Tolerancia Aitken", value=1e-6, format="%.10f", key="tol_aitken"
@@ -801,15 +804,42 @@ def _panel_aitken() -> None:
                 step=1,
                 key="iter_aitken",
             )
+            muestras_lipschitz = st.number_input(
+                "Muestras verificacion Lipschitz",
+                min_value=20,
+                value=200,
+                step=10,
+                key="aitken_lipschitz_n",
+            )
         if st.button("Aplicar Aitken (punto fijo)", use_container_width=True):
             try:
-                resultado = aitken_desde_punto_fijo(g_expr, x0, float(tolerancia), int(max_iter))
+                lipschitz = verificar_lipschitz_compacto(
+                    g_expr=g_expr,
+                    a=float(a_compacto),
+                    b=float(b_compacto),
+                    muestras=int(muestras_lipschitz),
+                    umbral=1.0,
+                )
+                resultado = aitken_desde_punto_fijo(
+                    g_expr,
+                    x0,
+                    float(tolerancia),
+                    int(max_iter),
+                    a_compacto=float(a_compacto),
+                    b_compacto=float(b_compacto),
+                    muestras_lipschitz=int(muestras_lipschitz),
+                )
             except ValueError as exc:
                 st.error(str(exc))
                 return
             st.success(
                 f"Aprox Aitken: {_fmt6(resultado.aproximacion)} "
                 f"| convergio={resultado.convergio}"
+            )
+            st.caption(
+                "Verificacion en compacto: "
+                f"[{_fmt6(float(a_compacto))}, {_fmt6(float(b_compacto))}] "
+                f"con L estimada={_fmt6(lipschitz)} < 1."
             )
             tabla = [_row_fmt6(asdict(p)) for p in resultado.pasos]
             _mostrar_tabla_fmt6(tabla)

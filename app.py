@@ -17,6 +17,7 @@ from modelos import (
     metodo_punto_fijo,
     newton_raphson,
     runge_kutta_4,
+    verificar_lipschitz_compacto,
 )
 
 
@@ -471,14 +472,41 @@ def _ejercicio_aitken() -> None:
     max_iter = leer_int_opcional(
         f"Max iteraciones (Enter={iter_default}): ", iter_default
     )
+    a_default = x0 - 1.0
+    b_default = x0 + 1.0
+    a_compacto = leer_float_opcional(
+        f"Compacto a (Enter={_fmt6(a_default)}): ", a_default
+    )
+    b_compacto = leer_float_opcional(
+        f"Compacto b (Enter={_fmt6(b_default)}): ", b_default
+    )
+    muestras = leer_int_opcional(
+        "Muestras para estimar Lipschitz (Enter=200): ", 200, minimo=20
+    )
     try:
-        resultado = aitken_desde_punto_fijo(g_expr, x0, tolerancia, max_iter)
+        lipschitz = verificar_lipschitz_compacto(
+            g_expr=g_expr,
+            a=a_compacto,
+            b=b_compacto,
+            muestras=muestras,
+            umbral=1.0,
+        )
+        resultado = aitken_desde_punto_fijo(
+            g_expr,
+            x0,
+            tolerancia,
+            max_iter,
+            a_compacto=a_compacto,
+            b_compacto=b_compacto,
+            muestras_lipschitz=muestras,
+        )
     except ValueError as exc:
         print(f"Error: {exc}")
         return
     print(
         f"\nAprox Aitken: {_fmt6(resultado.aproximacion)} | convergio={resultado.convergio}"
     )
+    print(f"Lipschitz estimada en [{_fmt6(a_compacto)}, {_fmt6(b_compacto)}]: {_fmt6(lipschitz)}")
 
 
 def _ejercicio_lagrange() -> None:
