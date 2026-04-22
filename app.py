@@ -233,8 +233,6 @@ def _mostrar_resultado_integracion(
     nombre, columnas, filas = _tabla_detalle_integracion(opcion, f_expr, a, b, n)
     print(f"\nTabla de aportes - {nombre}:")
     _imprimir_tabla(columnas, filas)
-
-
 def leer_float(mensaje: str) -> float:
     while True:
         valor = input(mensaje).strip()
