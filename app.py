@@ -11,12 +11,18 @@ from modelos import (
     aitken_desde_punto_fijo,
     aitken_delta_cuadrado,
     biseccion,
+    cuadratura_gauss_legendre,
     crecimiento_logistico,
     diferencia_central,
+    integracion_con_error_truncamiento,
     interpolacion_lagrange,
     metodo_punto_fijo,
     newton_raphson,
+    rectangulo_medio_compuesto,
     runge_kutta_4,
+    simpson_13_compuesto,
+    simpson_38_compuesto,
+    trapecio_compuesto,
     verificar_lipschitz_compacto,
 )
 
@@ -293,6 +299,59 @@ def ejecutar_logistico() -> None:
     print("\nEvolucion:")
     for idx, valor in enumerate(serie):
         print(f"x_{idx} = {_fmt6(valor)}")
+
+
+def ejecutar_integracion_numerica() -> None:
+    print("\n--- Integracion Numerica (Newton-Cotes y Gauss) ---")
+    print("1) Trapecio compuesto")
+    print("2) Simpson 1/3 compuesto")
+    print("3) Simpson 3/8 compuesto")
+    print("4) Rectangulo medio compuesto")
+    print("5) Cuadratura de Gauss-Legendre")
+    opcion = leer_int("Elegi metodo (1-5): ", minimo=1)
+    if opcion > 5:
+        print("Metodo invalido.")
+        return
+
+    f_expr = leer_expresion("Ingresa f(x): ")
+    a = leer_float("Limite inferior a: ")
+    b = leer_float("Limite superior b: ")
+    n = leer_int("Subintervalos / orden n: ", minimo=1)
+
+    try:
+        if opcion == 1:
+            integral_base = trapecio_compuesto(f_expr, a, b, n)
+            integral, error_trunc, _, integral_ref = integracion_con_error_truncamiento(
+                f_expr, a, b, n, "trapecio"
+            )
+        elif opcion == 2:
+            integral_base = simpson_13_compuesto(f_expr, a, b, n)
+            integral, error_trunc, _, integral_ref = integracion_con_error_truncamiento(
+                f_expr, a, b, n, "simpson13"
+            )
+        elif opcion == 3:
+            integral_base = simpson_38_compuesto(f_expr, a, b, n)
+            integral, error_trunc, _, integral_ref = integracion_con_error_truncamiento(
+                f_expr, a, b, n, "simpson38"
+            )
+        elif opcion == 4:
+            integral_base = rectangulo_medio_compuesto(f_expr, a, b, n)
+            integral, error_trunc, _, integral_ref = integracion_con_error_truncamiento(
+                f_expr, a, b, n, "rectangulo_medio"
+            )
+        else:
+            integral_base = cuadratura_gauss_legendre(f_expr, a, b, n)
+            integral, error_trunc, _, integral_ref = integracion_con_error_truncamiento(
+                f_expr, a, b, n, "gauss"
+            )
+    except ValueError as exc:
+        print(f"Error: {exc}")
+        return
+
+    print(f"\nIntegral mejorada: {_fmt6(integral)}")
+    print(f"Error de truncamiento estimado: {_fmt6(error_trunc)}")
+    print(f"Integral base: {_fmt6(integral_base)}")
+    print(f"Integral refinada: {_fmt6(integral_ref)}")
 
 
 _BISECCION_PRESETS = {
@@ -636,7 +695,8 @@ def mostrar_menu() -> None:
     print("6) Aceleracion de Aitken")
     print("7) EDO (Euler, Euler mejorado y RK4)")
     print("8) Modelo Logistico Discreto")
-    print("9) Resolver ejercicios del PDF (modo guiado)")
+    print("9) Integracion numerica")
+    print("10) Resolver ejercicios del PDF (modo guiado)")
     print("0) Salir")
 
 
@@ -666,6 +726,8 @@ def main() -> None:
         elif opcion == "8":
             ejecutar_logistico()
         elif opcion == "9":
+            ejecutar_integracion_numerica()
+        elif opcion == "10":
             ejecutar_ejercicios_pdf()
         elif opcion == "0":
             print("Hasta luego.")

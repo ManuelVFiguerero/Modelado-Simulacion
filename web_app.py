@@ -19,6 +19,7 @@ from modelos import (
     euler,
     euler_mejorado,
     evaluar_expresion,
+    integracion_con_error_truncamiento,
     integracion_montecarlo,
     integracion_montecarlo_doble,
     interpolacion_lagrange,
@@ -226,6 +227,30 @@ def _fig_qq_normal(samples: List[float], titulo: str) -> go.Figure | None:
         yaxis_title="Cuantiles muestrales",
     )
     return fig
+
+
+def _resolver_integracion_mejorada(
+    metodo: str,
+    f_expr: str,
+    a: float,
+    b: float,
+    n: int,
+) -> tuple[float, float, float, float]:
+    mapa = {
+        "Trapecio compuesto": "trapecio",
+        "Simpson 1/3 compuesto": "simpson13",
+        "Simpson 3/8 compuesto": "simpson38",
+        "Rectangulo medio compuesto": "rectangulo_medio",
+        "Cuadratura de Gauss-Legendre": "gauss",
+    }
+    clave = mapa[metodo]
+    return integracion_con_error_truncamiento(
+        f_expr=f_expr,
+        a=float(a),
+        b=float(b),
+        n=int(n),
+        metodo=clave,
+    )
 
 
 def _eval_expr_points(expr: str, xs: List[float]) -> List[float]:
@@ -1019,20 +1044,42 @@ def _panel_integracion() -> None:
     if st.button("Integrar", use_container_width=True):
         try:
             if metodo == "Trapecio compuesto":
-                integral = trapecio_compuesto(f_expr, a, b, int(n))
+                integral_base = trapecio_compuesto(f_expr, a, b, int(n))
+                integral, error_trunc, _, integral_ref = integracion_con_error_truncamiento(
+                    f_expr, a, b, int(n), "trapecio"
+                )
             elif metodo == "Simpson 1/3 compuesto":
-                integral = simpson_13_compuesto(f_expr, a, b, int(n))
+                integral_base = simpson_13_compuesto(f_expr, a, b, int(n))
+                integral, error_trunc, _, integral_ref = integracion_con_error_truncamiento(
+                    f_expr, a, b, int(n), "simpson13"
+                )
             elif metodo == "Simpson 3/8 compuesto":
-                integral = simpson_38_compuesto(f_expr, a, b, int(n))
+                integral_base = simpson_38_compuesto(f_expr, a, b, int(n))
+                integral, error_trunc, _, integral_ref = integracion_con_error_truncamiento(
+                    f_expr, a, b, int(n), "simpson38"
+                )
             elif metodo == "Rectangulo medio compuesto":
-                integral = rectangulo_medio_compuesto(f_expr, a, b, int(n))
+                integral_base = rectangulo_medio_compuesto(f_expr, a, b, int(n))
+                integral, error_trunc, _, integral_ref = integracion_con_error_truncamiento(
+                    f_expr, a, b, int(n), "rectangulo_medio"
+                )
             else:
-                integral = cuadratura_gauss_legendre(f_expr, a, b, int(n))
+                integral_base = cuadratura_gauss_legendre(f_expr, a, b, int(n))
+                integral, error_trunc, _, integral_ref = integracion_con_error_truncamiento(
+                    f_expr, a, b, int(n), "gauss"
+                )
         except ValueError as exc:
             st.error(str(exc))
             return
 
-        st.success(f"Integral aproximada: {_fmt6(integral)}")
+        st.success(
+            f"Integral mejorada: {_fmt6(integral)} | "
+            f"error truncamiento estimado: {_fmt6(error_trunc)}"
+        )
+        st.caption(
+            f"Base={_fmt6(integral_base)} | Refinada={_fmt6(integral_ref)} "
+            "(se usa refinamiento/Richardson para mayor precision)."
+        )
 
         # Visualizacion del integrando en [a,b]
         try:
