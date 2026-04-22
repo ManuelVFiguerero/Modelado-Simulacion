@@ -15,6 +15,8 @@ from modelos import (
     biseccion,
     cuadratura_gauss_legendre,
     diferencia_central,
+    euler,
+    euler_mejorado,
     evaluar_expresion,
     integracion_montecarlo,
     integracion_montecarlo_doble,
@@ -370,20 +372,29 @@ def _panel_aitken() -> None:
             st.plotly_chart(fig, use_container_width=True)
 
 
-def _panel_rk4() -> None:
-    st.subheader("Runge-Kutta de Orden 4 (RK4)")
+def _panel_edo() -> None:
+    st.subheader("EDO por metodos explicitos (Euler / Euler mejorado / RK4)")
     col1, col2 = st.columns(2)
     with col1:
+        metodo_edo = st.selectbox(
+            "Metodo EDO",
+            ["Euler", "Euler mejorado (Heun)", "Runge-Kutta 4 (RK4)"],
+        )
         ode_expr = st.text_input("f(t, y)", value="y + t**2")
         t0 = st.number_input("t0", value=0.0)
         y0 = st.number_input("y0", value=1.0)
     with col2:
-        h = st.number_input("h RK4", value=0.1, format="%.10f")
+        h = st.number_input("h", value=0.1, format="%.10f")
         pasos = st.number_input("Pasos", min_value=1, value=10, step=1)
 
-    if st.button("Simular RK4", use_container_width=True):
+    if st.button("Simular EDO", use_container_width=True):
         try:
-            trayectoria = runge_kutta_4(ode_expr, t0, y0, float(h), int(pasos))
+            if metodo_edo == "Euler":
+                trayectoria = euler(ode_expr, t0, y0, float(h), int(pasos))
+            elif metodo_edo == "Euler mejorado (Heun)":
+                trayectoria = euler_mejorado(ode_expr, t0, y0, float(h), int(pasos))
+            else:
+                trayectoria = runge_kutta_4(ode_expr, t0, y0, float(h), int(pasos))
         except ValueError as exc:
             st.error(str(exc))
             return
@@ -399,7 +410,11 @@ def _panel_rk4() -> None:
                 name="y(t)",
             )
         )
-        fig.update_layout(title="Trayectoria RK4", xaxis_title="t", yaxis_title="y")
+        fig.update_layout(
+            title=f"Trayectoria por {metodo_edo}",
+            xaxis_title="t",
+            yaxis_title="y",
+        )
         st.plotly_chart(fig, use_container_width=True)
 
 

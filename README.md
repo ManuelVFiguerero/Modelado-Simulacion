@@ -17,6 +17,8 @@ Pequena aplicacion en Python para simular y resolver modelos matematicos desde c
 - **Delta-Cuadrado de Aitken** (usa los ultimos 3 terminos de una secuencia).
 
 ### 4) Simulacion de evolucion (EDO)
+- **Euler explicito** para `y' = f(t, y)`.
+- **Euler mejorado (Heun)** para `y' = f(t, y)`.
 - **Runge-Kutta de orden 4 (RK4)** para `y' = f(t, y)`.
 
 ### 5) Modelo discreto adicional
@@ -57,7 +59,7 @@ La web incluye:
 - graficos de convergencia por iteracion (Biseccion, Punto Fijo, Newton, Aitken),
 - curva de la funcion en intervalos configurables,
 - interpolacion de Lagrange con nodos + curva interpolante,
-- trayectoria RK4 y modelo logistico,
+- trayectoria de EDO con Euler, Euler mejorado o RK4, y modelo logistico,
 - comparacion visual de metodos de integracion numerica,
 - paneles de **Monte Carlo** para:
   - integral simple,
@@ -98,7 +100,7 @@ Incluye presets para:
 - Aitken (aplicado a secuencias de punto fijo).
 - Lagrange (nodos y punto a evaluar).
 - Diferencias centrales (funcion, punto y h).
-- RK4 para EDOs de valor inicial.
+- Euler, Euler mejorado y RK4 para EDOs de valor inicial.
 - Integracion numerica para ejercicios de Newton-Cotes y Gauss.
 
 Esto permite elegir un ejercicio y cambiar solo tolerancia/iteraciones cuando haga falta.
@@ -109,5 +111,5 @@ Esto permite elegir un ejercicio y cambiar solo tolerancia/iteraciones cuando ha
   `sin`, `cos`, `tan`, `exp`, `log`, `sqrt`, `abs`, etc.
 - Variables esperadas por metodo:
   - Raices e interpolacion: `x`
-  - RK4: `t` y `y`
+  - EDO (Euler/Euler mejorado/RK4): `t` y `y`
 - En Lagrange, los valores de `x` de los puntos deben ser distintos.

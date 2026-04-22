@@ -894,6 +894,72 @@ def aitken_desde_punto_fijo(
     return AitkenResult(convergio=False, aproximacion=aproximacion, pasos=pasos)
 
 
+def _validar_parametros_edo(h: float, pasos: int) -> None:
+    if h <= 0:
+        raise ValueError("h debe ser mayor a cero.")
+    if pasos < 1:
+        raise ValueError("pasos debe ser mayor o igual a 1.")
+
+
+def euler_explicito(
+    ode_expr: str,
+    t0: float,
+    y0: float,
+    h: float,
+    pasos: int,
+) -> List[RK4Step]:
+    """Integra y' = f(t, y) con Euler explicito."""
+    _validar_parametros_edo(h, pasos)
+
+    t = t0
+    y = y0
+    trayectoria: List[RK4Step] = [RK4Step(paso=0, t=t, y=y)]
+
+    for paso in range(1, pasos + 1):
+        f_actual = _evaluar_expresion(ode_expr, t=t, y=y)
+        y = y + h * f_actual
+        t = t + h
+        trayectoria.append(RK4Step(paso=paso, t=t, y=y))
+
+    return trayectoria
+
+
+def euler(
+    ode_expr: str,
+    t0: float,
+    y0: float,
+    h: float,
+    pasos: int,
+) -> List[RK4Step]:
+    """Alias de compatibilidad para Euler explicito."""
+    return euler_explicito(ode_expr, t0, y0, h, pasos)
+
+
+def euler_mejorado(
+    ode_expr: str,
+    t0: float,
+    y0: float,
+    h: float,
+    pasos: int,
+) -> List[RK4Step]:
+    """Integra y' = f(t, y) con Euler mejorado (Heun)."""
+    _validar_parametros_edo(h, pasos)
+
+    t = t0
+    y = y0
+    trayectoria: List[RK4Step] = [RK4Step(paso=0, t=t, y=y)]
+
+    for paso in range(1, pasos + 1):
+        k1 = _evaluar_expresion(ode_expr, t=t, y=y)
+        y_pred = y + h * k1
+        k2 = _evaluar_expresion(ode_expr, t=t + h, y=y_pred)
+        y = y + (h / 2.0) * (k1 + k2)
+        t = t + h
+        trayectoria.append(RK4Step(paso=paso, t=t, y=y))
+
+    return trayectoria
+
+
 def runge_kutta_4(
     ode_expr: str,
     t0: float,
@@ -902,10 +968,7 @@ def runge_kutta_4(
     pasos: int,
 ) -> List[RK4Step]:
     """Integra y' = f(t, y) con Runge-Kutta de orden 4."""
-    if h <= 0:
-        raise ValueError("h debe ser mayor a cero.")
-    if pasos < 1:
-        raise ValueError("pasos debe ser mayor o igual a 1.")
+    _validar_parametros_edo(h, pasos)
 
     t = t0
     y = y0
@@ -994,6 +1057,26 @@ class MetodosNumericos:
         pasos: int,
     ) -> List[RK4Step]:
         return runge_kutta_4(ode_expr, t0, y0, h, pasos)
+
+    @staticmethod
+    def euler(
+        ode_expr: str,
+        t0: float,
+        y0: float,
+        h: float,
+        pasos: int,
+    ) -> List[RK4Step]:
+        return euler_explicito(ode_expr, t0, y0, h, pasos)
+
+    @staticmethod
+    def euler_mejorado(
+        ode_expr: str,
+        t0: float,
+        y0: float,
+        h: float,
+        pasos: int,
+    ) -> List[RK4Step]:
+        return euler_mejorado(ode_expr, t0, y0, h, pasos)
 
     @staticmethod
     def trapecio(
