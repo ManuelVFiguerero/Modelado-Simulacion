@@ -407,11 +407,11 @@ def trapecio_compuesto(f_expr: str, a: float, b: float, n: int) -> float:
         raise ValueError("n debe ser mayor o igual a 1.")
 
     h = (b - a) / n
-    suma = 0.5 * _evaluar_expresion(f_expr, x=a) + 0.5 * _evaluar_expresion(f_expr, x=b)
+    terminos = [0.5 * _evaluar_expresion(f_expr, x=a), 0.5 * _evaluar_expresion(f_expr, x=b)]
     for i in range(1, n):
         x_i = a + i * h
-        suma += _evaluar_expresion(f_expr, x=x_i)
-    return h * suma
+        terminos.append(_evaluar_expresion(f_expr, x=x_i))
+    return h * math.fsum(terminos)
 
 
 def simpson_13_compuesto(f_expr: str, a: float, b: float, n: int) -> float:
@@ -422,12 +422,12 @@ def simpson_13_compuesto(f_expr: str, a: float, b: float, n: int) -> float:
         raise ValueError("Para Simpson 1/3, n debe ser par y >= 2.")
 
     h = (b - a) / n
-    suma = _evaluar_expresion(f_expr, x=a) + _evaluar_expresion(f_expr, x=b)
+    terminos = [_evaluar_expresion(f_expr, x=a), _evaluar_expresion(f_expr, x=b)]
     for i in range(1, n):
         x_i = a + i * h
         coef = 4 if i % 2 == 1 else 2
-        suma += coef * _evaluar_expresion(f_expr, x=x_i)
-    return (h / 3.0) * suma
+        terminos.append(coef * _evaluar_expresion(f_expr, x=x_i))
+    return (h / 3.0) * math.fsum(terminos)
 
 
 def simpson_38_compuesto(f_expr: str, a: float, b: float, n: int) -> float:
@@ -438,12 +438,12 @@ def simpson_38_compuesto(f_expr: str, a: float, b: float, n: int) -> float:
         raise ValueError("Para Simpson 3/8, n debe ser multiplo de 3 y >= 3.")
 
     h = (b - a) / n
-    suma = _evaluar_expresion(f_expr, x=a) + _evaluar_expresion(f_expr, x=b)
+    terminos = [_evaluar_expresion(f_expr, x=a), _evaluar_expresion(f_expr, x=b)]
     for i in range(1, n):
         x_i = a + i * h
         coef = 2 if i % 3 == 0 else 3
-        suma += coef * _evaluar_expresion(f_expr, x=x_i)
-    return (3.0 * h / 8.0) * suma
+        terminos.append(coef * _evaluar_expresion(f_expr, x=x_i))
+    return (3.0 * h / 8.0) * math.fsum(terminos)
 
 
 def rectangulo_medio_compuesto(f_expr: str, a: float, b: float, n: int) -> float:
@@ -454,11 +454,11 @@ def rectangulo_medio_compuesto(f_expr: str, a: float, b: float, n: int) -> float
         raise ValueError("n debe ser mayor o igual a 1.")
 
     h = (b - a) / n
-    suma = 0.0
+    terminos: List[float] = []
     for i in range(n):
         x_medio = a + (i + 0.5) * h
-        suma += _evaluar_expresion(f_expr, x=x_medio)
-    return h * suma
+        terminos.append(_evaluar_expresion(f_expr, x=x_medio))
+    return h * math.fsum(terminos)
 
 
 _GAUSS_LEGENDRE_TABLA: Dict[int, Tuple[Tuple[float, float], ...]] = {
@@ -501,11 +501,71 @@ def cuadratura_gauss_legendre(
 
     c1 = (b - a) / 2.0
     c2 = (a + b) / 2.0
-    suma = 0.0
+    terminos: List[float] = []
     for xi, wi in _GAUSS_LEGENDRE_TABLA[orden]:
         x_transformado = c1 * xi + c2
-        suma += wi * _evaluar_expresion(f_expr, x=x_transformado)
-    return c1 * suma
+        terminos.append(wi * _evaluar_expresion(f_expr, x=x_transformado))
+    return c1 * math.fsum(terminos)
+
+
+def integracion_con_error_truncamiento(
+    f_expr: str,
+    a: float,
+    b: float,
+    n: int,
+    metodo: str,
+) -> tuple[float, float, float, float]:
+    """Calcula integral mejorada y estima error de truncamiento.
+
+    Retorna:
+    - integral_mejorada
+    - error_truncamiento_estimado
+    - integral_base (n)
+    - integral_refinada (malla refinada u orden mayor)
+    """
+    metodo_norm = metodo.strip().lower()
+
+    if metodo_norm == "trapecio":
+        base = trapecio_compuesto(f_expr, a, b, n)
+        refinada = trapecio_compuesto(f_expr, a, b, 2 * n)
+        p = 2
+        correccion = (refinada - base) / (2**p - 1)
+        mejorada = refinada + correccion
+        return mejorada, abs(correccion), base, refinada
+
+    if metodo_norm == "simpson13":
+        base = simpson_13_compuesto(f_expr, a, b, n)
+        refinada = simpson_13_compuesto(f_expr, a, b, 2 * n)
+        p = 4
+        correccion = (refinada - base) / (2**p - 1)
+        mejorada = refinada + correccion
+        return mejorada, abs(correccion), base, refinada
+
+    if metodo_norm == "simpson38":
+        base = simpson_38_compuesto(f_expr, a, b, n)
+        refinada = simpson_38_compuesto(f_expr, a, b, 2 * n)
+        p = 4
+        correccion = (refinada - base) / (2**p - 1)
+        mejorada = refinada + correccion
+        return mejorada, abs(correccion), base, refinada
+
+    if metodo_norm == "rectangulo_medio":
+        base = rectangulo_medio_compuesto(f_expr, a, b, n)
+        refinada = rectangulo_medio_compuesto(f_expr, a, b, 2 * n)
+        p = 2
+        correccion = (refinada - base) / (2**p - 1)
+        mejorada = refinada + correccion
+        return mejorada, abs(correccion), base, refinada
+
+    if metodo_norm == "gauss":
+        base = cuadratura_gauss_legendre(f_expr, a, b, n)
+        if n < 5:
+            refinada = cuadratura_gauss_legendre(f_expr, a, b, n + 1)
+            error = abs(refinada - base)
+            return refinada, error, base, refinada
+        return base, 0.0, base, base
+
+    raise ValueError("Metodo de integracion no soportado para estimacion de error.")
 
 
 def gauss_legendre_cuadratura(

@@ -66,6 +66,7 @@ La web incluye:
 - interpolacion de Lagrange con nodos, curva interpolante y aportes por nodo,
 - trayectoria de EDO con Euler, Euler mejorado o RK4 + comparativa entre los 3 metodos,
 - comparacion visual de metodos de integracion numerica + integral acumulada,
+- estimacion de error de truncamiento y valor mejorado por refinamiento (Richardson) en integracion,
 - paneles de **Monte Carlo** para:
   - integral simple,
   - integral doble en rectangulos,
@@ -109,6 +110,7 @@ Incluye presets para:
 - Diferencias centrales (funcion, punto y h).
 - Euler, Euler mejorado y RK4 para EDOs de valor inicial.
 - Integracion numerica para ejercicios de Newton-Cotes y Gauss.
+  Incluye estimacion de error de truncamiento y valor mejorado/refinado.
 
 Esto permite elegir un ejercicio y cambiar solo tolerancia/iteraciones cuando haga falta.
 
