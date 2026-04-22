@@ -113,3 +113,5 @@ Esto permite elegir un ejercicio y cambiar solo tolerancia/iteraciones cuando ha
   - Raices e interpolacion: `x`
   - EDO (Euler/Euler mejorado/RK4): `t` y `y`
 - En Lagrange, los valores de `x` de los puntos deben ser distintos.
+- Formato de salida: la app muestra resultados con **6 decimales por truncado**
+  (sin redondeo visual), manteniendo calculo interno en precision completa.

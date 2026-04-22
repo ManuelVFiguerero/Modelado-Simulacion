@@ -33,6 +33,31 @@ from modelos import (
 )
 
 
+def _truncar_decimales(valor: float, decimales: int = 6) -> float:
+    factor = 10**decimales
+    if valor >= 0:
+        return math.floor(float(valor) * factor) / factor
+    return math.ceil(float(valor) * factor) / factor
+
+
+def _fmt6(valor: float) -> str:
+    return f"{_truncar_decimales(valor, 6):.6f}"
+
+
+def _fmt6_percent(valor: float) -> str:
+    return f"{_truncar_decimales(valor * 100, 6):.6f}%"
+
+
+def _row_fmt6(fila: dict) -> dict:
+    nueva: dict = {}
+    for clave, valor in fila.items():
+        if isinstance(valor, float):
+            nueva[clave] = _truncar_decimales(valor, 6)
+        else:
+            nueva[clave] = valor
+    return nueva
+
+
 def _eval_expr_points(expr: str, xs: List[float]) -> List[float]:
     """Evalua expresiones usando el motor comun (respeta modo angular)."""
     ys: List[float] = []
@@ -108,10 +133,10 @@ def _panel_biseccion() -> None:
             return
 
         st.success(
-            f"Aprox raiz: {resultado.aproximacion:.10f} | convergio={resultado.convergio}"
+            f"Aprox raiz: {_fmt6(resultado.aproximacion)} | convergio={resultado.convergio}"
         )
         if resultado.pasos:
-            tabla = [asdict(p) for p in resultado.pasos]
+            tabla = [_row_fmt6(asdict(p)) for p in resultado.pasos]
             st.dataframe(tabla, use_container_width=True)
 
             fig_conv = go.Figure()
@@ -170,9 +195,9 @@ def _panel_punto_fijo() -> None:
             st.error(str(exc))
             return
         st.success(
-            f"Aprox raiz: {resultado.aproximacion:.10f} | convergio={resultado.convergio}"
+            f"Aprox raiz: {_fmt6(resultado.aproximacion)} | convergio={resultado.convergio}"
         )
-        tabla = [asdict(p) for p in resultado.pasos]
+        tabla = [_row_fmt6(asdict(p)) for p in resultado.pasos]
         st.dataframe(tabla, use_container_width=True)
 
         fig_err = go.Figure()
@@ -214,9 +239,9 @@ def _panel_newton() -> None:
             st.error(str(exc))
             return
         st.success(
-            f"Aprox raiz: {resultado.aproximacion:.10f} | convergio={resultado.convergio}"
+            f"Aprox raiz: {_fmt6(resultado.aproximacion)} | convergio={resultado.convergio}"
         )
-        tabla = [asdict(p) for p in resultado.pasos]
+        tabla = [_row_fmt6(asdict(p)) for p in resultado.pasos]
         st.dataframe(tabla, use_container_width=True)
 
         fig_err = go.Figure()
@@ -251,7 +276,7 @@ def _panel_lagrange() -> None:
         except ValueError as exc:
             st.error(str(exc))
             return
-        st.success(f"P({x_eval}) = {valor}")
+        st.success(f"P({_fmt6(x_eval)}) = {_fmt6(valor)}")
 
         xs_datos = [p[0] for p in puntos]
         x_min, x_max = min(xs_datos), max(xs_datos)
@@ -298,7 +323,7 @@ def _panel_diferencia_central() -> None:
         except ValueError as exc:
             st.error(str(exc))
             return
-        st.success(f"f'({x}) ≈ {derivada}")
+        st.success(f"f'({_fmt6(x)}) ≈ {_fmt6(derivada)}")
 
         try:
             xs = [x - 5 * float(h) + i * float(h) for i in range(11)]
@@ -325,7 +350,7 @@ def _panel_aitken() -> None:
             except ValueError as exc:
                 st.error(str(exc))
                 return
-            st.success(f"Valor acelerado: {valor}")
+            st.success(f"Valor acelerado: {_fmt6(valor)}")
     else:
         col1, col2 = st.columns(2)
         with col1:
@@ -349,10 +374,10 @@ def _panel_aitken() -> None:
                 st.error(str(exc))
                 return
             st.success(
-                f"Aprox Aitken: {resultado.aproximacion:.10f} "
+                f"Aprox Aitken: {_fmt6(resultado.aproximacion)} "
                 f"| convergio={resultado.convergio}"
             )
-            tabla = [asdict(p) for p in resultado.pasos]
+            tabla = [_row_fmt6(asdict(p)) for p in resultado.pasos]
             st.dataframe(tabla, use_container_width=True)
 
             fig = go.Figure()
@@ -398,7 +423,7 @@ def _panel_edo() -> None:
         except ValueError as exc:
             st.error(str(exc))
             return
-        tabla = [asdict(p) for p in trayectoria]
+        tabla = [_row_fmt6(asdict(p)) for p in trayectoria]
         st.dataframe(tabla, use_container_width=True)
 
         fig = go.Figure()
@@ -457,7 +482,7 @@ def _panel_integracion() -> None:
             st.error(str(exc))
             return
 
-        st.success(f"Integral aproximada: {integral:.12f}")
+        st.success(f"Integral aproximada: {_fmt6(integral)}")
 
         # Visualizacion del integrando en [a,b]
         try:
@@ -549,13 +574,13 @@ def _panel_montecarlo() -> None:
                 st.error(str(exc))
                 return
 
-            st.success(f"Integral estimada: {resultado.estimacion:.12f}")
+            st.success(f"Integral estimada: {_fmt6(resultado.estimacion)}")
             st.markdown(
-                f"- Varianza muestral: `{resultado.varianza_muestral:.6e}`\n"
-                f"- Desvio estandar muestral: `{resultado.desvio_muestral:.6e}`\n"
-                f"- Error estandar: `{resultado.error_estandar:.6e}`\n"
-                f"- IC {resultado.confianza*100:.1f}%: "
-                f"`[{resultado.ic_bajo:.12f}, {resultado.ic_alto:.12f}]`"
+                f"- Varianza muestral: `{_fmt6(resultado.varianza_muestral)}`\n"
+                f"- Desvio estandar muestral: `{_fmt6(resultado.desvio_muestral)}`\n"
+                f"- Error estandar: `{_fmt6(resultado.error_estandar)}`\n"
+                f"- IC {_fmt6_percent(resultado.confianza)}: "
+                f"`[{_fmt6(resultado.ic_bajo)}, {_fmt6(resultado.ic_alto)}]`"
             )
 
             if resultado.muestras_transformadas:
@@ -651,13 +676,13 @@ def _panel_montecarlo() -> None:
                 st.error(str(exc))
                 return
 
-            st.success(f"Integral doble estimada: {resultado.estimacion:.12f}")
+            st.success(f"Integral doble estimada: {_fmt6(resultado.estimacion)}")
             st.markdown(
-                f"- Varianza muestral: `{resultado.varianza_muestral:.6e}`\n"
-                f"- Desvio estandar muestral: `{resultado.desvio_muestral:.6e}`\n"
-                f"- Error estandar: `{resultado.error_estandar:.6e}`\n"
-                f"- IC {resultado.confianza*100:.1f}%: "
-                f"`[{resultado.ic_bajo:.12f}, {resultado.ic_alto:.12f}]`"
+                f"- Varianza muestral: `{_fmt6(resultado.varianza_muestral)}`\n"
+                f"- Desvio estandar muestral: `{_fmt6(resultado.desvio_muestral)}`\n"
+                f"- Error estandar: `{_fmt6(resultado.error_estandar)}`\n"
+                f"- IC {_fmt6_percent(resultado.confianza)}: "
+                f"`[{_fmt6(resultado.ic_bajo)}, {_fmt6(resultado.ic_alto)}]`"
             )
 
             if resultado.muestras_transformadas:
@@ -760,15 +785,15 @@ def _panel_montecarlo() -> None:
 
             st.success("Simulacion Monte Carlo de trading completada")
             st.markdown(
-                f"**Precio call (MC)**: `{res.precio_call_mc:.6f}`\n\n"
-                f"**Precio call (Black-Scholes)**: `{res.precio_call_bs:.6f}`\n\n"
-                f"**Varianza estimador call**: `{res.varianza_call:.6e}`\n\n"
-                f"**Desvio call**: `{res.desvio_call:.6e}`\n\n"
-                f"**Error estandar call**: `{res.error_estandar_call:.6e}`\n\n"
-                f"**IC call {res.confianza*100:.1f}%**: "
-                f"`[{res.ic_call_bajo:.6f}, {res.ic_call_alto:.6f}]`\n\n"
-                f"**VaR cartera ({res.confianza*100:.1f}%)**: `{res.var_portafolio:.6f}`\n\n"
-                f"**Expected Shortfall cartera**: `{res.es_portafolio:.6f}`\n\n"
+                f"**Precio call (MC)**: `{_fmt6(res.precio_call_mc)}`\n\n"
+                f"**Precio call (Black-Scholes)**: `{_fmt6(res.precio_call_bs)}`\n\n"
+                f"**Varianza estimador call**: `{_fmt6(res.varianza_call)}`\n\n"
+                f"**Desvio call**: `{_fmt6(res.desvio_call)}`\n\n"
+                f"**Error estandar call**: `{_fmt6(res.error_estandar_call)}`\n\n"
+                f"**IC call {_fmt6_percent(res.confianza)}**: "
+                f"`[{_fmt6(res.ic_call_bajo)}, {_fmt6(res.ic_call_alto)}]`\n\n"
+                f"**VaR cartera ({_fmt6_percent(res.confianza)})**: `{_fmt6(res.var_portafolio)}`\n\n"
+                f"**Expected Shortfall cartera**: `{_fmt6(res.es_portafolio)}`\n\n"
                 f"**Horizonte**: `{res.horizonte_dias}` dia(s)"
             )
 
