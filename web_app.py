@@ -53,20 +53,20 @@ def _row_fmt6(fila: dict) -> dict:
     nueva: dict = {}
     for clave, valor in fila.items():
         if isinstance(valor, float):
-            nueva[clave] = _truncar_decimales(valor, 8)
+            nueva[clave] = _truncar_decimales(valor, 10)
         else:
             nueva[clave] = valor
     return nueva
 
 
 def _tabla_display_fmt6(tabla: List[dict]) -> List[dict]:
-    """Prepara filas para st.dataframe con 8 decimales fijos sin redondeo."""
+    """Prepara filas para st.dataframe con 10 decimales fijos sin redondeo."""
     salida: List[dict] = []
     for fila in tabla:
         nueva: dict = {}
         for clave, valor in fila.items():
             if isinstance(valor, float):
-                nueva[clave] = f"{_truncar_decimales(valor, 8):.8f}"
+                nueva[clave] = f"{_truncar_decimales(valor, 10):.10f}"
             else:
                 nueva[clave] = valor
         salida.append(nueva)
