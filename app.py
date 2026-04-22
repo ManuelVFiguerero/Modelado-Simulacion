@@ -6,6 +6,8 @@ import math
 from typing import List, Sequence, Tuple
 
 from modelos import (
+    euler_explicito,
+    euler_mejorado,
     aitken_desde_punto_fijo,
     aitken_delta_cuadrado,
     biseccion,
@@ -224,9 +226,17 @@ def ejecutar_aitken() -> None:
     print(f"Valor acelerado de Aitken: {acelerado}")
 
 
-def ejecutar_rk4() -> None:
-    print("\n--- Runge-Kutta de Orden 4 (RK4) ---")
+def ejecutar_edo() -> None:
+    print("\n--- Metodos para EDO de 1er orden ---")
     print("La EDO debe escribirse como y' = f(t, y). Ejemplo: 0.1*y")
+    print("1) Euler")
+    print("2) Euler mejorado (Heun)")
+    print("3) Runge-Kutta de Orden 4 (RK4)")
+    opcion = leer_int("Elegi metodo (1-3): ", minimo=1)
+    if opcion > 3:
+        print("Metodo invalido.")
+        return
+
     ode_expr = leer_expresion("Ingresa f(t, y): ")
     t0 = leer_float("Tiempo inicial t0: ")
     y0 = leer_float("Condicion inicial y0: ")
@@ -234,12 +244,20 @@ def ejecutar_rk4() -> None:
     pasos = leer_int("Cantidad de pasos: ", minimo=1)
 
     try:
-        trayectoria = runge_kutta_4(ode_expr, t0, y0, h, pasos)
+        if opcion == 1:
+            trayectoria = euler_explicito(ode_expr, t0, y0, h, pasos)
+            nombre_metodo = "Euler"
+        elif opcion == 2:
+            trayectoria = euler_mejorado(ode_expr, t0, y0, h, pasos)
+            nombre_metodo = "Euler mejorado (Heun)"
+        else:
+            trayectoria = runge_kutta_4(ode_expr, t0, y0, h, pasos)
+            nombre_metodo = "Runge-Kutta de Orden 4 (RK4)"
     except ValueError as exc:
         print(f"Error: {exc}")
         return
 
-    print("\nTrayectoria:")
+    print(f"\nTrayectoria ({nombre_metodo}):")
     print("paso\t t\t y")
     for punto in trayectoria:
         print(f"{punto.paso}\t {punto.t:.8f}\t {punto.y:.8f}")
@@ -497,6 +515,40 @@ def _ejercicio_rk4() -> None:
         print(f"{punto.paso}\t {punto.t:.8f}\t {punto.y:.8f}")
 
 
+def _ejercicio_edo() -> None:
+    seleccionado = _elegir_preset("Ejercicios PDF - EDO", _RK4_PRESETS)
+    if seleccionado is None:
+        return
+    _, ode_expr, t0, y0, h, pasos = seleccionado
+
+    print("Metodo para resolver el ejercicio:")
+    print("1) Euler")
+    print("2) Euler mejorado (Heun)")
+    print("3) Runge-Kutta de Orden 4 (RK4)")
+    opcion = leer_int("Elegi metodo (1-3): ", minimo=1)
+    if opcion > 3:
+        print("Metodo invalido.")
+        return
+
+    try:
+        if opcion == 1:
+            trayectoria = euler_explicito(ode_expr, t0, y0, h, pasos)
+            nombre_metodo = "Euler"
+        elif opcion == 2:
+            trayectoria = euler_mejorado(ode_expr, t0, y0, h, pasos)
+            nombre_metodo = "Euler mejorado (Heun)"
+        else:
+            trayectoria = runge_kutta_4(ode_expr, t0, y0, h, pasos)
+            nombre_metodo = "Runge-Kutta de Orden 4 (RK4)"
+    except ValueError as exc:
+        print(f"Error: {exc}")
+        return
+    print(f"\nTrayectoria ({nombre_metodo}):")
+    print("paso\t t\t y")
+    for punto in trayectoria:
+        print(f"{punto.paso}\t {punto.t:.8f}\t {punto.y:.8f}")
+
+
 def ejecutar_ejercicios_pdf() -> None:
     while True:
         print("\n==============================")
@@ -508,7 +560,7 @@ def ejecutar_ejercicios_pdf() -> None:
         print("4) Aitken")
         print("5) Lagrange")
         print("6) Diferencias Finitas")
-        print("7) RK4")
+        print("7) EDO (Euler, Euler mejorado y RK4)")
         print("0) Volver")
         opcion = input("Selecciona una opcion: ").strip()
 
@@ -525,7 +577,7 @@ def ejecutar_ejercicios_pdf() -> None:
         elif opcion == "6":
             _ejercicio_diferencias()
         elif opcion == "7":
-            _ejercicio_rk4()
+            _ejercicio_edo()
         elif opcion == "0":
             return
         else:
@@ -542,7 +594,7 @@ def mostrar_menu() -> None:
     print("4) Metodo de Newton-Raphson")
     print("5) Diferencia Central (Derivacion numerica)")
     print("6) Aceleracion de Aitken")
-    print("7) Runge-Kutta 4 (EDO)")
+    print("7) EDO (Euler, Euler mejorado y RK4)")
     print("8) Modelo Logistico Discreto")
     print("9) Resolver ejercicios del PDF (modo guiado)")
     print("0) Salir")
@@ -570,7 +622,7 @@ def main() -> None:
         elif opcion == "6":
             ejecutar_aitken()
         elif opcion == "7":
-            ejecutar_rk4()
+            ejecutar_edo()
         elif opcion == "8":
             ejecutar_logistico()
         elif opcion == "9":
