@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import asdict
 import math
+from statistics import NormalDist
 from typing import List, Tuple
 
 import plotly.graph_objects as go
@@ -31,6 +32,199 @@ from modelos import (
     simpson_38_compuesto,
     trapecio_compuesto,
 )
+
+
+def _truncar_decimales(valor: float, decimales: int = 6) -> float:
+    factor = 10**decimales
+    if valor >= 0:
+        return math.floor(float(valor) * factor) / factor
+    return math.ceil(float(valor) * factor) / factor
+
+
+def _fmt6(valor: float) -> str:
+    return f"{_truncar_decimales(valor, 6):.6f}"
+
+
+def _fmt6_percent(valor: float) -> str:
+    return f"{_truncar_decimales(valor * 100, 6):.6f}%"
+
+
+def _row_fmt6(fila: dict) -> dict:
+    nueva: dict = {}
+    for clave, valor in fila.items():
+        if isinstance(valor, float):
+            nueva[clave] = _truncar_decimales(valor, 6)
+        else:
+            nueva[clave] = valor
+    return nueva
+
+
+def _tabla_display_fmt6(tabla: List[dict]) -> List[dict]:
+    """Prepara filas para st.dataframe con 6 decimales fijos sin redondeo."""
+    salida: List[dict] = []
+    for fila in tabla:
+        nueva: dict = {}
+        for clave, valor in fila.items():
+            if isinstance(valor, float):
+                nueva[clave] = _fmt6(valor)
+            else:
+                nueva[clave] = valor
+        salida.append(nueva)
+    return salida
+
+
+def _mostrar_tabla_fmt6(tabla: List[dict]) -> None:
+    st.dataframe(_tabla_display_fmt6(tabla), use_container_width=True)
+
+
+def _normal_ajustada(samples: List[float], puntos: int = 240) -> tuple[List[float], List[float], float, float] | None:
+    if len(samples) < 2:
+        return None
+    media = sum(samples) / len(samples)
+    var = sum((v - media) ** 2 for v in samples) / (len(samples) - 1)
+    if var <= 0:
+        return None
+    sigma = math.sqrt(var)
+    minimo, maximo = min(samples), max(samples)
+    span = maximo - minimo
+    margen = 0.15 * span if span > 0 else max(1.0, abs(media) * 0.15)
+    x0, x1 = minimo - margen, maximo + margen
+    xs = [x0 + (x1 - x0) * i / (puntos - 1) for i in range(puntos)]
+    coef = 1.0 / (sigma * math.sqrt(2.0 * math.pi))
+    ys = [coef * math.exp(-0.5 * ((x - media) / sigma) ** 2) for x in xs]
+    return xs, ys, media, sigma
+
+
+def _running_mean(samples: List[float], max_points: int = 2500) -> tuple[List[int], List[float]]:
+    if not samples:
+        return [], []
+    k = min(len(samples), max_points)
+    step = max(1, len(samples) // k)
+    indices: List[int] = []
+    medias: List[float] = []
+    acumulado = 0.0
+    for i, valor in enumerate(samples, start=1):
+        acumulado += valor
+        if i % step == 0 or i == len(samples):
+            indices.append(i)
+            medias.append(acumulado / i)
+            if len(indices) >= max_points:
+                break
+    return indices, medias
+
+
+def _agregar_histograma_campana(
+    fig: go.Figure,
+    samples: List[float],
+    nombre_hist: str = "Muestras",
+    color_hist: str = "#4f81bd",
+    densidad: bool = True,
+    bins: int = 50,
+) -> None:
+    fig.add_trace(
+        go.Histogram(
+            x=samples,
+            nbinsx=bins,
+            histnorm="probability density" if densidad else None,
+            name=nombre_hist,
+            marker_color=color_hist,
+            opacity=0.6,
+        )
+    )
+    normal = _normal_ajustada(samples)
+    if normal is None:
+        return
+    xs, ys, media, sigma = normal
+    fig.add_trace(
+        go.Scatter(
+            x=xs,
+            y=ys,
+            mode="lines",
+            name=f"Campana normal ajustada (mu={_fmt6(media)}, sigma={_fmt6(sigma)})",
+            line=dict(width=2, color="#111111"),
+        )
+    )
+    fig.add_vline(x=media, line_dash="dash", line_color="green", annotation_text="media")
+
+
+def _agregar_curva_normal_ajustada(
+    fig: go.Figure, samples: List[float], nombre: str = "Curva normal ajustada"
+) -> None:
+    normal = _normal_ajustada(samples)
+    if normal is None:
+        return
+    xs, ys, media, sigma = normal
+    fig.add_trace(
+        go.Scatter(
+            x=xs,
+            y=ys,
+            mode="lines",
+            name=f"{nombre} (mu={_fmt6(media)}, sigma={_fmt6(sigma)})",
+            line=dict(width=2, color="#111111"),
+        )
+    )
+    fig.add_vline(x=media, line_dash="dash", line_color="green", annotation_text="media")
+
+
+def _fig_media_acumulada(samples: List[float], titulo: str) -> go.Figure:
+    indices, medias = _running_mean(samples)
+    fig = go.Figure()
+    fig.add_trace(
+        go.Scatter(
+            x=indices,
+            y=medias,
+            mode="lines",
+            name="Media acumulada",
+            line=dict(color="#1f77b4"),
+        )
+    )
+    fig.update_layout(
+        title=titulo,
+        xaxis_title="Cantidad de muestras",
+        yaxis_title="Media acumulada",
+    )
+    return fig
+
+
+def _fig_qq_normal(samples: List[float], titulo: str) -> go.Figure | None:
+    if len(samples) < 3:
+        return None
+    normal = _normal_ajustada(samples)
+    if normal is None:
+        return None
+    _, _, media, sigma = normal
+    ordenados = sorted(samples)
+    n = len(ordenados)
+    dist = NormalDist(mu=media, sigma=sigma)
+    teoricos = [dist.inv_cdf((i - 0.5) / n) for i in range(1, n + 1)]
+
+    x0 = min(teoricos)
+    x1 = max(teoricos)
+    fig = go.Figure()
+    fig.add_trace(
+        go.Scatter(
+            x=teoricos,
+            y=ordenados,
+            mode="markers",
+            name="Cuantiles muestrales",
+            marker=dict(size=5, color="#1f77b4", opacity=0.65),
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=[x0, x1],
+            y=[x0, x1],
+            mode="lines",
+            name="Referencia y=x",
+            line=dict(dash="dash", color="#111111"),
+        )
+    )
+    fig.update_layout(
+        title=titulo,
+        xaxis_title="Cuantiles teoricos normales",
+        yaxis_title="Cuantiles muestrales",
+    )
+    return fig
 
 
 def _eval_expr_points(expr: str, xs: List[float]) -> List[float]:
@@ -84,6 +278,7 @@ def _mostrar_titulo() -> None:
         index=0 if st.session_state["angle_mode"] == "radianes" else 1,
     )
     st.session_state["angle_mode"] = "radianes" if modo == "Radianes" else "grados"
+    set_angular_mode(st.session_state["angle_mode"])
     st.sidebar.caption(
         f"Modo activo: {st.session_state['angle_mode']} (sin/cos/tan)"
     )
@@ -108,11 +303,11 @@ def _panel_biseccion() -> None:
             return
 
         st.success(
-            f"Aprox raiz: {resultado.aproximacion:.10f} | convergio={resultado.convergio}"
+            f"Aprox raiz: {_fmt6(resultado.aproximacion)} | convergio={resultado.convergio}"
         )
         if resultado.pasos:
-            tabla = [asdict(p) for p in resultado.pasos]
-            st.dataframe(tabla, use_container_width=True)
+            tabla = [_row_fmt6(asdict(p)) for p in resultado.pasos]
+            _mostrar_tabla_fmt6(tabla)
 
             fig_conv = go.Figure()
             fig_conv.add_trace(
@@ -129,6 +324,28 @@ def _panel_biseccion() -> None:
                 yaxis_title="Error de intervalo",
             )
             st.plotly_chart(fig_conv, use_container_width=True)
+
+            # Distancia entre iteraciones para ver estabilizacion de c_n.
+            if len(resultado.pasos) >= 2:
+                deltas = [
+                    abs(resultado.pasos[i].c - resultado.pasos[i - 1].c)
+                    for i in range(1, len(resultado.pasos))
+                ]
+                fig_delta = go.Figure()
+                fig_delta.add_trace(
+                    go.Scatter(
+                        x=list(range(2, len(resultado.pasos) + 1)),
+                        y=deltas,
+                        mode="lines+markers",
+                        name="|c_n - c_(n-1)|",
+                    )
+                )
+                fig_delta.update_layout(
+                    title="Estabilizacion de la aproximacion c_n",
+                    xaxis_title="Iteracion",
+                    yaxis_title="Distancia entre iteraciones",
+                )
+                st.plotly_chart(fig_delta, use_container_width=True)
 
             try:
                 xs = [a + (b - a) * i / 200 for i in range(201)]
@@ -170,10 +387,10 @@ def _panel_punto_fijo() -> None:
             st.error(str(exc))
             return
         st.success(
-            f"Aprox raiz: {resultado.aproximacion:.10f} | convergio={resultado.convergio}"
+            f"Aprox raiz: {_fmt6(resultado.aproximacion)} | convergio={resultado.convergio}"
         )
-        tabla = [asdict(p) for p in resultado.pasos]
-        st.dataframe(tabla, use_container_width=True)
+        tabla = [_row_fmt6(asdict(p)) for p in resultado.pasos]
+        _mostrar_tabla_fmt6(tabla)
 
         fig_err = go.Figure()
         fig_err.add_trace(
@@ -190,6 +407,24 @@ def _panel_punto_fijo() -> None:
             yaxis_title="|x_n+1 - x_n|",
         )
         st.plotly_chart(fig_err, use_container_width=True)
+
+        if tabla:
+            xs_pf = [fila["x_actual"] for fila in tabla]
+            fig_orbita = go.Figure()
+            fig_orbita.add_trace(
+                go.Scatter(
+                    x=list(range(1, len(xs_pf) + 1)),
+                    y=xs_pf,
+                    mode="lines+markers",
+                    name="x_n",
+                )
+            )
+            fig_orbita.update_layout(
+                title="Orbita de iteraciones de Punto Fijo",
+                xaxis_title="Iteracion",
+                yaxis_title="x_n",
+            )
+            st.plotly_chart(fig_orbita, use_container_width=True)
 
 
 def _panel_newton() -> None:
@@ -214,10 +449,10 @@ def _panel_newton() -> None:
             st.error(str(exc))
             return
         st.success(
-            f"Aprox raiz: {resultado.aproximacion:.10f} | convergio={resultado.convergio}"
+            f"Aprox raiz: {_fmt6(resultado.aproximacion)} | convergio={resultado.convergio}"
         )
-        tabla = [asdict(p) for p in resultado.pasos]
-        st.dataframe(tabla, use_container_width=True)
+        tabla = [_row_fmt6(asdict(p)) for p in resultado.pasos]
+        _mostrar_tabla_fmt6(tabla)
 
         fig_err = go.Figure()
         fig_err.add_trace(
@@ -235,6 +470,128 @@ def _panel_newton() -> None:
         )
         st.plotly_chart(fig_err, use_container_width=True)
 
+        if tabla:
+            fig_rel = go.Figure()
+            rels: List[float] = []
+            for fila in tabla:
+                x_act = float(fila["x_actual"])
+                if abs(x_act) > 0:
+                    rels.append(abs(float(fila["error"])) / abs(x_act))
+                else:
+                    rels.append(float(fila["error"]))
+            fig_rel.add_trace(
+                go.Scatter(
+                    x=[fila["iteracion"] for fila in tabla],
+                    y=rels,
+                    mode="lines+markers",
+                    name="error relativo aprox",
+                )
+            )
+            fig_rel.update_layout(
+                title="Error relativo aproximado por iteracion",
+                xaxis_title="Iteracion",
+                yaxis_title="|error| / |x_n|",
+            )
+            st.plotly_chart(fig_rel, use_container_width=True)
+
+        try:
+            x_vals = [float(fila["x_actual"]) for fila in tabla]
+            if x_vals:
+                x_min, x_max = min(x_vals), max(x_vals)
+                if abs(x_max - x_min) < 1e-12:
+                    x_min -= 1.0
+                    x_max += 1.0
+                margen = 0.2 * (x_max - x_min)
+                xs = [x_min - margen + (x_max - x_min + 2 * margen) * i / 240 for i in range(241)]
+                ys_f = _eval_expr_points(f_expr, xs)
+                ys_df = _eval_expr_points(df_expr, xs)
+                fig_fun = go.Figure()
+                fig_fun.add_trace(
+                    go.Scatter(x=xs, y=ys_f, mode="lines", name="f(x)", line=dict(color="#1f77b4"))
+                )
+                fig_fun.add_trace(
+                    go.Scatter(
+                        x=xs,
+                        y=ys_df,
+                        mode="lines",
+                        name="f'(x)",
+                        line=dict(color="#ff7f0e", dash="dot"),
+                    )
+                )
+                fig_fun.add_hline(y=0, line_dash="dash")
+                fig_fun.add_vline(x=resultado.aproximacion, line_dash="dot")
+                fig_fun.update_layout(
+                    title="Comparacion f(x) y f'(x) en la zona iterada",
+                    xaxis_title="x",
+                    yaxis_title="Valor",
+                )
+                st.plotly_chart(fig_fun, use_container_width=True)
+        except Exception:
+            st.info("No se pudo construir el grafico de f(x) y f'(x).")
+
+        if tabla:
+            fig_fx = go.Figure()
+            fig_fx.add_trace(
+                go.Scatter(
+                    x=[fila["x_actual"] for fila in tabla],
+                    y=[fila["fx_actual"] for fila in tabla],
+                    mode="lines+markers",
+                    name="f(x_n)",
+                )
+            )
+            fig_fx.add_hline(y=0, line_dash="dash")
+            fig_fx.update_layout(
+                title="Evaluacion de f(x_n) por iteracion",
+                xaxis_title="x_n",
+                yaxis_title="f(x_n)",
+            )
+            st.plotly_chart(fig_fx, use_container_width=True)
+
+        if resultado.pasos:
+            fig_res = go.Figure()
+            fig_res.add_trace(
+                go.Scatter(
+                    x=[p.iteracion for p in resultado.pasos],
+                    y=[abs(p.fx_actual) for p in resultado.pasos],
+                    mode="lines+markers",
+                    name="|f(x_n)|",
+                    line=dict(color="#d62728"),
+                )
+            )
+            fig_res.update_layout(
+                title="Residuo de Newton por iteracion",
+                xaxis_title="Iteracion",
+                yaxis_title="|f(x_n)|",
+            )
+            st.plotly_chart(fig_res, use_container_width=True)
+
+            try:
+                xs_hist = [resultado.pasos[0].x_anterior] + [p.x_actual for p in resultado.pasos]
+                x_min, x_max = min(xs_hist), max(xs_hist)
+                margen = (x_max - x_min) * 0.2 if x_max > x_min else 1.0
+                xs = [x_min - margen + (x_max - x_min + 2 * margen) * i / 220 for i in range(221)]
+                ys = _eval_expr_points(f_expr, xs)
+                fig_fx = go.Figure()
+                fig_fx.add_trace(go.Scatter(x=xs, y=ys, mode="lines", name="f(x)"))
+                fig_fx.add_trace(
+                    go.Scatter(
+                        x=xs_hist,
+                        y=[float(evaluar_expresion(f_expr, x=v)) for v in xs_hist],
+                        mode="markers+lines",
+                        name="Iteraciones x_n",
+                        marker=dict(size=7, color="#9467bd"),
+                    )
+                )
+                fig_fx.add_hline(y=0, line_dash="dash")
+                fig_fx.update_layout(
+                    title="Trayectoria de iteraciones sobre f(x)",
+                    xaxis_title="x",
+                    yaxis_title="f(x)",
+                )
+                st.plotly_chart(fig_fx, use_container_width=True)
+            except Exception:
+                st.info("No se pudo generar la grafica de trayectoria de Newton.")
+
 
 def _panel_lagrange() -> None:
     st.subheader("Interpolacion de Lagrange")
@@ -251,7 +608,7 @@ def _panel_lagrange() -> None:
         except ValueError as exc:
             st.error(str(exc))
             return
-        st.success(f"P({x_eval}) = {valor}")
+        st.success(f"P({_fmt6(x_eval)}) = {_fmt6(valor)}")
 
         xs_datos = [p[0] for p in puntos]
         x_min, x_max = min(xs_datos), max(xs_datos)
@@ -282,6 +639,51 @@ def _panel_lagrange() -> None:
         fig.update_layout(title="Interpolacion de Lagrange", xaxis_title="x", yaxis_title="y")
         st.plotly_chart(fig, use_container_width=True)
 
+        # Aportes de cada termino base en x_eval
+        aportes = []
+        for i, (xi, yi) in enumerate(puntos):
+            li = 1.0
+            for j, (xj, _) in enumerate(puntos):
+                if i != j:
+                    li *= (x_eval - xj) / (xi - xj)
+            aportes.append({"nodo": f"({ _fmt6(xi)}, { _fmt6(yi)})", "aporte": yi * li})
+
+        fig_aportes = go.Figure()
+        fig_aportes.add_trace(
+            go.Bar(
+                x=[a["nodo"] for a in aportes],
+                y=[a["aporte"] for a in aportes],
+                marker_color="#9467bd",
+            )
+        )
+        fig_aportes.update_layout(
+            title="Aportes de los nodos en P(x_eval)",
+            xaxis_title="Nodo",
+            yaxis_title="Aporte",
+        )
+        st.plotly_chart(fig_aportes, use_container_width=True)
+
+        # Grafico adicional: error en nodos (deberia ser cercano a 0)
+        errores_nodo = [
+            interpolacion_lagrange(puntos, px) - py for px, py in puntos
+        ]
+        fig_err = go.Figure()
+        fig_err.add_trace(
+            go.Bar(
+                x=[px for px, _ in puntos],
+                y=errores_nodo,
+                name="Error en nodo",
+                marker_color="#9467bd",
+            )
+        )
+        fig_err.add_hline(y=0, line_dash="dash")
+        fig_err.update_layout(
+            title="Error de interpolacion en nodos",
+            xaxis_title="x nodo",
+            yaxis_title="P(x)-y",
+        )
+        st.plotly_chart(fig_err, use_container_width=True)
+
 
 def _panel_diferencia_central() -> None:
     st.subheader("Derivacion Numerica (Diferencia Central)")
@@ -298,7 +700,7 @@ def _panel_diferencia_central() -> None:
         except ValueError as exc:
             st.error(str(exc))
             return
-        st.success(f"f'({x}) ≈ {derivada}")
+        st.success(f"f'({_fmt6(x)}) ≈ {_fmt6(derivada)}")
 
         try:
             xs = [x - 5 * float(h) + i * float(h) for i in range(11)]
@@ -306,8 +708,48 @@ def _panel_diferencia_central() -> None:
             fig = go.Figure()
             fig.add_trace(go.Scatter(x=xs, y=ys, mode="lines+markers", name="f(x)"))
             fig.add_vline(x=x, line_dash="dash")
+            # Recta tangente usando la derivada numerica calculada.
+            yx = float(evaluar_expresion(f_expr, x=x))
+            ys_tan = [yx + derivada * (xi - x) for xi in xs]
+            fig.add_trace(
+                go.Scatter(
+                    x=xs,
+                    y=ys_tan,
+                    mode="lines",
+                    name="Recta tangente aprox",
+                    line=dict(dash="dot"),
+                )
+            )
             fig.update_layout(title="Vecindad de f(x) para derivacion", xaxis_title="x", yaxis_title="f(x)")
             st.plotly_chart(fig, use_container_width=True)
+
+            hs = [10 ** (-k) for k in range(1, 7)]
+            derivs: List[float] = []
+            hs_ok: List[float] = []
+            for h_test in hs:
+                try:
+                    derivs.append(diferencia_central(f_expr, x, h_test))
+                    hs_ok.append(h_test)
+                except ValueError:
+                    continue
+            if hs_ok:
+                fig_h = go.Figure()
+                fig_h.add_trace(
+                    go.Scatter(
+                        x=hs_ok,
+                        y=derivs,
+                        mode="lines+markers",
+                        name="f'(x) aprox",
+                        line=dict(color="#ff7f0e"),
+                    )
+                )
+                fig_h.update_xaxes(type="log")
+                fig_h.update_layout(
+                    title="Sensibilidad de la derivada al paso h",
+                    xaxis_title="h (escala log)",
+                    yaxis_title="f'(x) aproximada",
+                )
+                st.plotly_chart(fig_h, use_container_width=True)
         except Exception:
             st.info("No se pudo graficar la funcion para esta expresion.")
 
@@ -325,7 +767,24 @@ def _panel_aitken() -> None:
             except ValueError as exc:
                 st.error(str(exc))
                 return
-            st.success(f"Valor acelerado: {valor}")
+            st.success(f"Valor acelerado: {_fmt6(valor)}")
+
+            fig_seq = go.Figure()
+            fig_seq.add_trace(
+                go.Scatter(
+                    x=list(range(1, len(secuencia) + 1)),
+                    y=secuencia,
+                    mode="lines+markers",
+                    name="Secuencia original",
+                )
+            )
+            fig_seq.add_hline(y=valor, line_dash="dash", line_color="green", annotation_text="Aitken")
+            fig_seq.update_layout(
+                title="Secuencia manual y valor acelerado",
+                xaxis_title="Indice",
+                yaxis_title="Valor",
+            )
+            st.plotly_chart(fig_seq, use_container_width=True)
     else:
         col1, col2 = st.columns(2)
         with col1:
@@ -349,11 +808,11 @@ def _panel_aitken() -> None:
                 st.error(str(exc))
                 return
             st.success(
-                f"Aprox Aitken: {resultado.aproximacion:.10f} "
+                f"Aprox Aitken: {_fmt6(resultado.aproximacion)} "
                 f"| convergio={resultado.convergio}"
             )
-            tabla = [asdict(p) for p in resultado.pasos]
-            st.dataframe(tabla, use_container_width=True)
+            tabla = [_row_fmt6(asdict(p)) for p in resultado.pasos]
+            _mostrar_tabla_fmt6(tabla)
 
             fig = go.Figure()
             fig.add_trace(
@@ -370,6 +829,30 @@ def _panel_aitken() -> None:
                 yaxis_title="Error",
             )
             st.plotly_chart(fig, use_container_width=True)
+
+            fig_vals = go.Figure()
+            fig_vals.add_trace(
+                go.Scatter(
+                    x=[fila["iteracion"] for fila in tabla],
+                    y=[fila["xn"] for fila in tabla],
+                    mode="lines+markers",
+                    name="x_n",
+                )
+            )
+            fig_vals.add_trace(
+                go.Scatter(
+                    x=[fila["iteracion"] for fila in tabla],
+                    y=[fila["x_aitken"] for fila in tabla],
+                    mode="lines+markers",
+                    name="x_aitken",
+                )
+            )
+            fig_vals.update_layout(
+                title="Comparacion de iterados: base vs Aitken",
+                xaxis_title="Iteracion",
+                yaxis_title="Valor",
+            )
+            st.plotly_chart(fig_vals, use_container_width=True)
 
 
 def _panel_edo() -> None:
@@ -398,8 +881,8 @@ def _panel_edo() -> None:
         except ValueError as exc:
             st.error(str(exc))
             return
-        tabla = [asdict(p) for p in trayectoria]
-        st.dataframe(tabla, use_container_width=True)
+        tabla = [_row_fmt6(asdict(p)) for p in trayectoria]
+        _mostrar_tabla_fmt6(tabla)
 
         fig = go.Figure()
         fig.add_trace(
@@ -416,6 +899,68 @@ def _panel_edo() -> None:
             yaxis_title="y",
         )
         st.plotly_chart(fig, use_container_width=True)
+
+        # Comparacion lado a lado de los tres metodos para el mismo problema.
+        try:
+            tray_euler = euler(ode_expr, t0, y0, float(h), int(pasos))
+            tray_heun = euler_mejorado(ode_expr, t0, y0, float(h), int(pasos))
+            tray_rk4 = runge_kutta_4(ode_expr, t0, y0, float(h), int(pasos))
+            fig_cmp = go.Figure()
+            fig_cmp.add_trace(
+                go.Scatter(
+                    x=[p.t for p in tray_euler],
+                    y=[p.y for p in tray_euler],
+                    mode="lines+markers",
+                    name="Euler",
+                )
+            )
+            fig_cmp.add_trace(
+                go.Scatter(
+                    x=[p.t for p in tray_heun],
+                    y=[p.y for p in tray_heun],
+                    mode="lines+markers",
+                    name="Euler mejorado",
+                )
+            )
+            fig_cmp.add_trace(
+                go.Scatter(
+                    x=[p.t for p in tray_rk4],
+                    y=[p.y for p in tray_rk4],
+                    mode="lines+markers",
+                    name="RK4",
+                )
+            )
+            fig_cmp.update_layout(
+                title="Comparacion de trayectorias (Euler vs Heun vs RK4)",
+                xaxis_title="t",
+                yaxis_title="y",
+            )
+            st.plotly_chart(fig_cmp, use_container_width=True)
+        except ValueError:
+            pass
+
+        if len(tabla) >= 2:
+            dy_dt = [
+                (tabla[i]["y"] - tabla[i - 1]["y"]) / (tabla[i]["t"] - tabla[i - 1]["t"])
+                for i in range(1, len(tabla))
+            ]
+            t_mid = [tabla[i]["t"] for i in range(1, len(tabla))]
+            fig_dydt = go.Figure()
+            fig_dydt.add_trace(
+                go.Scatter(
+                    x=t_mid,
+                    y=dy_dt,
+                    mode="lines+markers",
+                    name="dy/dt aprox",
+                    line=dict(color="#ff7f0e"),
+                )
+            )
+            fig_dydt.update_layout(
+                title=f"Pendiente numerica de la solucion ({metodo_edo})",
+                xaxis_title="t",
+                yaxis_title="dy/dt",
+            )
+            st.plotly_chart(fig_dydt, use_container_width=True)
 
 
 def _panel_integracion() -> None:
@@ -457,7 +1002,7 @@ def _panel_integracion() -> None:
             st.error(str(exc))
             return
 
-        st.success(f"Integral aproximada: {integral:.12f}")
+        st.success(f"Integral aproximada: {_fmt6(integral)}")
 
         # Visualizacion del integrando en [a,b]
         try:
@@ -468,31 +1013,81 @@ def _panel_integracion() -> None:
             fig.add_hline(y=0, line_dash="dash")
             fig.update_layout(title="Integrando en [a,b]", xaxis_title="x", yaxis_title="f(x)")
             st.plotly_chart(fig, use_container_width=True)
+
+            # Area aproximada por subintervalos (sampling)
+            fig_area = go.Figure()
+            fig_area.add_trace(
+                go.Scatter(
+                    x=xs,
+                    y=ys,
+                    mode="lines",
+                    name="f(x)",
+                    line=dict(color="#1f77b4"),
+                )
+            )
+            n_int = int(n)
+            h_int = (b - a) / n_int
+            if metodo == "Rectangulo medio compuesto":
+                x_mids = [a + (i + 0.5) * h_int for i in range(n_int)]
+                y_mids = _eval_expr_points(f_expr, x_mids)
+                fig_area.add_trace(
+                    go.Bar(
+                        x=x_mids,
+                        y=y_mids,
+                        width=h_int * 0.95,
+                        opacity=0.35,
+                        name="Rectangulos",
+                        marker_color="#ff7f0e",
+                    )
+                )
+            else:
+                x_nodes = [a + i * h_int for i in range(n_int + 1)]
+                y_nodes = _eval_expr_points(f_expr, x_nodes)
+                fig_area.add_trace(
+                    go.Scatter(
+                        x=x_nodes,
+                        y=y_nodes,
+                        mode="markers",
+                        name="Nodos",
+                        marker=dict(size=7, color="#ff7f0e"),
+                    )
+                )
+
+            fig_area.update_layout(
+                title=f"Discretizacion para {metodo}",
+                xaxis_title="x",
+                yaxis_title="f(x)",
+            )
+            st.plotly_chart(fig_area, use_container_width=True)
+
+            acumulada = [0.0]
+            for i in range(1, len(xs)):
+                trap = 0.5 * (ys[i] + ys[i - 1]) * (xs[i] - xs[i - 1])
+                acumulada.append(acumulada[-1] + trap)
+            fig_acc = go.Figure()
+            fig_acc.add_trace(
+                go.Scatter(
+                    x=xs,
+                    y=acumulada,
+                    mode="lines",
+                    name="Integral acumulada (trapecio fino)",
+                    line=dict(color="#2ca02c"),
+                )
+            )
+            fig_acc.add_hline(
+                y=integral,
+                line_dash="dot",
+                line_color="black",
+                annotation_text="Aprox metodo seleccionado",
+            )
+            fig_acc.update_layout(
+                title="Evolucion de la integral acumulada",
+                xaxis_title="x",
+                yaxis_title="Integral desde a hasta x",
+            )
+            st.plotly_chart(fig_acc, use_container_width=True)
         except Exception:
             st.info("No se pudo graficar la funcion en el intervalo.")
-
-
-def _mc_std_from_samples(samples: List[float]) -> float:
-    n = len(samples)
-    if n < 2:
-        return 0.0
-    media = sum(samples) / n
-    var = sum((v - media) ** 2 for v in samples) / (n - 1)
-    return math.sqrt(var)
-
-
-def _norm_cdf(x: float) -> float:
-    return 0.5 * (1.0 + math.erf(x / math.sqrt(2.0)))
-
-
-def _black_scholes_call(s0: float, k: float, r: float, sigma: float, t: float) -> float:
-    if t <= 0:
-        return max(s0 - k, 0.0)
-    if sigma <= 0:
-        return max(s0 - k * math.exp(-r * t), 0.0)
-    d1 = (math.log(s0 / k) + (r + 0.5 * sigma * sigma) * t) / (sigma * math.sqrt(t))
-    d2 = d1 - sigma * math.sqrt(t)
-    return s0 * _norm_cdf(d1) - k * math.exp(-r * t) * _norm_cdf(d2)
 
 
 def _panel_montecarlo() -> None:
@@ -549,39 +1144,37 @@ def _panel_montecarlo() -> None:
                 st.error(str(exc))
                 return
 
-            st.success(f"Integral estimada: {resultado.estimacion:.12f}")
+            st.success(f"Integral estimada: {_fmt6(resultado.estimacion)}")
             st.markdown(
-                f"- Varianza muestral: `{resultado.varianza_muestral:.6e}`\n"
-                f"- Desvio estandar muestral: `{resultado.desvio_muestral:.6e}`\n"
-                f"- Error estandar: `{resultado.error_estandar:.6e}`\n"
-                f"- IC {resultado.confianza*100:.1f}%: "
-                f"`[{resultado.ic_bajo:.12f}, {resultado.ic_alto:.12f}]`"
+                f"- Varianza muestral: `{_fmt6(resultado.varianza_muestral)}`\n"
+                f"- Desvio estandar muestral: `{_fmt6(resultado.desvio_muestral)}`\n"
+                f"- Error estandar: `{_fmt6(resultado.error_estandar)}`\n"
+                f"- IC {_fmt6_percent(resultado.confianza)}: "
+                f"`[{_fmt6(resultado.ic_bajo)}, {_fmt6(resultado.ic_alto)}]`"
             )
 
             if resultado.muestras_transformadas:
                 fig_hist = go.Figure()
-                fig_hist.add_trace(
-                    go.Histogram(
-                        x=resultado.muestras_transformadas,
-                        nbinsx=45,
-                        name="Aportes",
-                        marker_color="#4f81bd",
-                        opacity=0.75,
-                    )
-                )
-                fig_hist.add_vline(
-                    x=resultado.estimacion,
-                    line_dash="dash",
-                    line_color="green",
-                    annotation_text="media",
+                _agregar_histograma_campana(
+                    fig_hist,
+                    resultado.muestras_transformadas,
+                    nombre_hist="Aportes MC (1D)",
+                    color_hist="#4f81bd",
+                    densidad=True,
                 )
                 fig_hist.update_layout(
                     title="Distribucion de aportes MC (1D)",
                     xaxis_title="(b-a) * f(U(a,b))",
-                    yaxis_title="Frecuencia",
+                    yaxis_title="Densidad",
                     bargap=0.05,
                 )
                 st.plotly_chart(fig_hist, use_container_width=True)
+
+                fig_media = _fig_media_acumulada(
+                    resultado.muestras_transformadas,
+                    "Media acumulada de aportes MC (1D)",
+                )
+                st.plotly_chart(fig_media, use_container_width=True)
 
             try:
                 xs = [float(a) + (float(b) - float(a)) * i / 300 for i in range(301)]
@@ -651,13 +1244,13 @@ def _panel_montecarlo() -> None:
                 st.error(str(exc))
                 return
 
-            st.success(f"Integral doble estimada: {resultado.estimacion:.12f}")
+            st.success(f"Integral doble estimada: {_fmt6(resultado.estimacion)}")
             st.markdown(
-                f"- Varianza muestral: `{resultado.varianza_muestral:.6e}`\n"
-                f"- Desvio estandar muestral: `{resultado.desvio_muestral:.6e}`\n"
-                f"- Error estandar: `{resultado.error_estandar:.6e}`\n"
-                f"- IC {resultado.confianza*100:.1f}%: "
-                f"`[{resultado.ic_bajo:.12f}, {resultado.ic_alto:.12f}]`"
+                f"- Varianza muestral: `{_fmt6(resultado.varianza_muestral)}`\n"
+                f"- Desvio estandar muestral: `{_fmt6(resultado.desvio_muestral)}`\n"
+                f"- Error estandar: `{_fmt6(resultado.error_estandar)}`\n"
+                f"- IC {_fmt6_percent(resultado.confianza)}: "
+                f"`[{_fmt6(resultado.ic_bajo)}, {_fmt6(resultado.ic_alto)}]`"
             )
 
             if resultado.muestras_transformadas:
@@ -682,7 +1275,18 @@ def _panel_montecarlo() -> None:
                     xaxis_title="Area * f(Ux, Uy)",
                     yaxis_title="Frecuencia",
                 )
+                _agregar_curva_normal_ajustada(
+                    fig_hist,
+                    resultado.muestras_transformadas,
+                    "Curva normal ajustada",
+                )
                 st.plotly_chart(fig_hist, use_container_width=True)
+
+                fig_media_2d = _fig_media_acumulada(
+                    resultado.muestras_transformadas,
+                    "Media acumulada de aportes MC (2D)",
+                )
+                st.plotly_chart(fig_media_2d, use_container_width=True)
 
             if resultado.x_muestras and resultado.y_muestras and resultado.fxy_muestras:
                 n_plot = min(2500, len(resultado.x_muestras))
@@ -760,15 +1364,15 @@ def _panel_montecarlo() -> None:
 
             st.success("Simulacion Monte Carlo de trading completada")
             st.markdown(
-                f"**Precio call (MC)**: `{res.precio_call_mc:.6f}`\n\n"
-                f"**Precio call (Black-Scholes)**: `{res.precio_call_bs:.6f}`\n\n"
-                f"**Varianza estimador call**: `{res.varianza_call:.6e}`\n\n"
-                f"**Desvio call**: `{res.desvio_call:.6e}`\n\n"
-                f"**Error estandar call**: `{res.error_estandar_call:.6e}`\n\n"
-                f"**IC call {res.confianza*100:.1f}%**: "
-                f"`[{res.ic_call_bajo:.6f}, {res.ic_call_alto:.6f}]`\n\n"
-                f"**VaR cartera ({res.confianza*100:.1f}%)**: `{res.var_portafolio:.6f}`\n\n"
-                f"**Expected Shortfall cartera**: `{res.es_portafolio:.6f}`\n\n"
+                f"**Precio call (MC)**: `{_fmt6(res.precio_call_mc)}`\n\n"
+                f"**Precio call (Black-Scholes)**: `{_fmt6(res.precio_call_bs)}`\n\n"
+                f"**Varianza estimador call**: `{_fmt6(res.varianza_call)}`\n\n"
+                f"**Desvio call**: `{_fmt6(res.desvio_call)}`\n\n"
+                f"**Error estandar call**: `{_fmt6(res.error_estandar_call)}`\n\n"
+                f"**IC call {_fmt6_percent(res.confianza)}**: "
+                f"`[{_fmt6(res.ic_call_bajo)}, {_fmt6(res.ic_call_alto)}]`\n\n"
+                f"**VaR cartera ({_fmt6_percent(res.confianza)})**: `{_fmt6(res.var_portafolio)}`\n\n"
+                f"**Expected Shortfall cartera**: `{_fmt6(res.es_portafolio)}`\n\n"
                 f"**Horizonte**: `{res.horizonte_dias}` dia(s)"
             )
 
@@ -800,7 +1404,18 @@ def _panel_montecarlo() -> None:
                     xaxis_title="Payoff descontado",
                     yaxis_title="Frecuencia",
                 )
+                _agregar_curva_normal_ajustada(
+                    fig_call,
+                    res.call_descuentos_muestras,
+                    "Curva normal ajustada",
+                )
                 st.plotly_chart(fig_call, use_container_width=True)
+
+                fig_call_media = _fig_media_acumulada(
+                    res.call_descuentos_muestras,
+                    "Media acumulada del payoff descontado de la call",
+                )
+                st.plotly_chart(fig_call_media, use_container_width=True)
 
             if res.perdidas_muestras and res.pnl_muestras:
                 fig_loss = go.Figure()
@@ -829,6 +1444,11 @@ def _panel_montecarlo() -> None:
                     title="Distribucion de perdidas de cartera (horizonte corto)",
                     xaxis_title="Perdida",
                     yaxis_title="Frecuencia",
+                )
+                _agregar_curva_normal_ajustada(
+                    fig_loss,
+                    res.perdidas_muestras,
+                    "Curva normal ajustada",
                 )
                 st.plotly_chart(fig_loss, use_container_width=True)
 
@@ -967,7 +1587,7 @@ def main() -> None:
     elif opcion == "Chuleta / Atajos":
         _panel_atajos()
     else:
-        _panel_rk4()
+        _panel_edo()
 
 
 if __name__ == "__main__":

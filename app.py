@@ -20,6 +20,17 @@ from modelos import (
 )
 
 
+def _truncar_decimales(valor: float, decimales: int = 6) -> float:
+    factor = 10**decimales
+    if valor >= 0:
+        return math.floor(valor * factor) / factor
+    return math.ceil(valor * factor) / factor
+
+
+def _fmt6(valor: float) -> str:
+    return f"{_truncar_decimales(float(valor), 6):.6f}"
+
+
 def leer_float(mensaje: str) -> float:
     while True:
         valor = input(mensaje).strip()
@@ -95,7 +106,7 @@ def ejecutar_lagrange() -> None:
     except ValueError as exc:
         print(f"Error: {exc}")
         return
-    print(f"Resultado interpolado: P({x_eval}) = {y_interp}")
+    print(f"Resultado interpolado: P({_fmt6(x_eval)}) = {_fmt6(y_interp)}")
 
 
 def ejecutar_punto_fijo() -> None:
@@ -116,15 +127,16 @@ def ejecutar_punto_fijo() -> None:
     print("it\t x_anterior\t x_actual\t error")
     for paso in resultado.pasos:
         print(
-            f"{paso.iteracion}\t {paso.x_anterior:.8f}\t {paso.x_actual:.8f}\t {paso.error:.3e}"
+            f"{paso.iteracion}\t {_fmt6(paso.x_anterior)}\t {_fmt6(paso.x_actual)}\t "
+            f"{_fmt6(paso.error)}"
         )
 
     if resultado.convergio:
-        print(f"\nConvergio a x = {resultado.aproximacion:.10f}")
+        print(f"\nConvergio a x = {_fmt6(resultado.aproximacion)}")
     else:
         print(
             "\nNo convergio en el maximo de iteraciones. "
-            f"Ultima aproximacion: {resultado.aproximacion:.10f}"
+            f"Ultima aproximacion: {_fmt6(resultado.aproximacion)}"
         )
 
 
@@ -147,16 +159,16 @@ def ejecutar_biseccion() -> None:
     print("it\t a\t b\t c\t f(c)\t error_intervalo")
     for paso in resultado.pasos:
         print(
-            f"{paso.iteracion}\t {paso.a:.8f}\t {paso.b:.8f}\t {paso.c:.8f}\t "
-            f"{paso.fc:.3e}\t {paso.error_intervalo:.3e}"
+            f"{paso.iteracion}\t {_fmt6(paso.a)}\t {_fmt6(paso.b)}\t {_fmt6(paso.c)}\t "
+            f"{_fmt6(paso.fc)}\t {_fmt6(paso.error_intervalo)}"
         )
 
     if resultado.convergio:
-        print(f"\nConvergio a x = {resultado.aproximacion:.10f}")
+        print(f"\nConvergio a x = {_fmt6(resultado.aproximacion)}")
     else:
         print(
             "\nNo convergio en el maximo de iteraciones. "
-            f"Ultima aproximacion: {resultado.aproximacion:.10f}"
+            f"Ultima aproximacion: {_fmt6(resultado.aproximacion)}"
         )
 
 
@@ -179,16 +191,16 @@ def ejecutar_newton() -> None:
     print("it\t x_anterior\t x_actual\t f(x_actual)\t error")
     for paso in resultado.pasos:
         print(
-            f"{paso.iteracion}\t {paso.x_anterior:.8f}\t {paso.x_actual:.8f}\t "
-            f"{paso.fx_actual:.3e}\t {paso.error:.3e}"
+            f"{paso.iteracion}\t {_fmt6(paso.x_anterior)}\t {_fmt6(paso.x_actual)}\t "
+            f"{_fmt6(paso.fx_actual)}\t {_fmt6(paso.error)}"
         )
 
     if resultado.convergio:
-        print(f"\nConvergio a x = {resultado.aproximacion:.10f}")
+        print(f"\nConvergio a x = {_fmt6(resultado.aproximacion)}")
     else:
         print(
             "\nNo convergio en el maximo de iteraciones. "
-            f"Ultima aproximacion: {resultado.aproximacion:.10f}"
+            f"Ultima aproximacion: {_fmt6(resultado.aproximacion)}"
         )
 
 
@@ -203,7 +215,7 @@ def ejecutar_diferencia_central() -> None:
     except ValueError as exc:
         print(f"Error: {exc}")
         return
-    print(f"f'({x}) = {derivada}")
+    print(f"f'({_fmt6(x)}) = {_fmt6(derivada)}")
 
 
 def _solicitar_secuencia() -> Sequence[float]:
@@ -223,7 +235,7 @@ def ejecutar_aitken() -> None:
     except ValueError as exc:
         print(f"Error: {exc}")
         return
-    print(f"Valor acelerado de Aitken: {acelerado}")
+    print(f"Valor acelerado de Aitken: {_fmt6(acelerado)}")
 
 
 def ejecutar_edo() -> None:
@@ -260,7 +272,7 @@ def ejecutar_edo() -> None:
     print(f"\nTrayectoria ({nombre_metodo}):")
     print("paso\t t\t y")
     for punto in trayectoria:
-        print(f"{punto.paso}\t {punto.t:.8f}\t {punto.y:.8f}")
+        print(f"{punto.paso}\t {_fmt6(punto.t)}\t {_fmt6(punto.y)}")
 
 
 def ejecutar_logistico() -> None:
@@ -279,7 +291,7 @@ def ejecutar_logistico() -> None:
 
     print("\nEvolucion:")
     for idx, valor in enumerate(serie):
-        print(f"x_{idx} = {valor}")
+        print(f"x_{idx} = {_fmt6(valor)}")
 
 
 _BISECCION_PRESETS = {
@@ -385,7 +397,7 @@ def _ejercicio_biseccion() -> None:
     except ValueError as exc:
         print(f"Error: {exc}")
         return
-    print(f"\nAprox raiz: {resultado.aproximacion:.10f} | convergio={resultado.convergio}")
+    print(f"\nAprox raiz: {_fmt6(resultado.aproximacion)} | convergio={resultado.convergio}")
 
 
 def _ejercicio_punto_fijo() -> None:
@@ -406,7 +418,7 @@ def _ejercicio_punto_fijo() -> None:
     except ValueError as exc:
         print(f"Error: {exc}")
         return
-    print(f"\nAprox raiz: {resultado.aproximacion:.10f} | convergio={resultado.convergio}")
+    print(f"\nAprox raiz: {_fmt6(resultado.aproximacion)} | convergio={resultado.convergio}")
 
 
 def _ejercicio_newton() -> None:
@@ -425,7 +437,7 @@ def _ejercicio_newton() -> None:
     except ValueError as exc:
         print(f"Error: {exc}")
         return
-    print(f"\nAprox raiz: {resultado.aproximacion:.10f} | convergio={resultado.convergio}")
+    print(f"\nAprox raiz: {_fmt6(resultado.aproximacion)} | convergio={resultado.convergio}")
 
 
 def _ejercicio_aitken() -> None:
@@ -443,7 +455,7 @@ def _ejercicio_aitken() -> None:
         except ValueError as exc:
             print(f"Error: {exc}")
             return
-        print(f"Valor acelerado: {acelerado}")
+        print(f"Valor acelerado: {_fmt6(acelerado)}")
         return
     if opcion != 2:
         print("Opcion invalida.")
@@ -465,7 +477,7 @@ def _ejercicio_aitken() -> None:
         print(f"Error: {exc}")
         return
     print(
-        f"\nAprox Aitken: {resultado.aproximacion:.10f} | convergio={resultado.convergio}"
+        f"\nAprox Aitken: {_fmt6(resultado.aproximacion)} | convergio={resultado.convergio}"
     )
 
 
@@ -479,7 +491,7 @@ def _ejercicio_lagrange() -> None:
     except ValueError as exc:
         print(f"Error: {exc}")
         return
-    print(f"\nP({x_eval}) = {valor}")
+    print(f"\nP({_fmt6(x_eval)}) = {_fmt6(valor)}")
 
 
 def _ejercicio_diferencias() -> None:
@@ -494,9 +506,9 @@ def _ejercicio_diferencias() -> None:
         try:
             derivada = diferencia_central(f_expr, x, h)
         except ValueError as exc:
-            print(f"x={x}: error {exc}")
+            print(f"x={_fmt6(x)}: error {exc}")
             continue
-        print(f"x={x:.4f} -> {derivada:.10f}")
+        print(f"x={_fmt6(x)} -> {_fmt6(derivada)}")
 
 
 def _ejercicio_rk4() -> None:
@@ -512,7 +524,41 @@ def _ejercicio_rk4() -> None:
     print("\nTrayectoria:")
     print("paso\t t\t y")
     for punto in trayectoria:
-        print(f"{punto.paso}\t {punto.t:.8f}\t {punto.y:.8f}")
+        print(f"{punto.paso}\t {_fmt6(punto.t)}\t {_fmt6(punto.y)}")
+
+
+def _ejercicio_edo() -> None:
+    seleccionado = _elegir_preset("Ejercicios PDF - EDO", _RK4_PRESETS)
+    if seleccionado is None:
+        return
+    _, ode_expr, t0, y0, h, pasos = seleccionado
+
+    print("Metodo para resolver el ejercicio:")
+    print("1) Euler")
+    print("2) Euler mejorado (Heun)")
+    print("3) Runge-Kutta de Orden 4 (RK4)")
+    opcion = leer_int("Elegi metodo (1-3): ", minimo=1)
+    if opcion > 3:
+        print("Metodo invalido.")
+        return
+
+    try:
+        if opcion == 1:
+            trayectoria = euler_explicito(ode_expr, t0, y0, h, pasos)
+            nombre_metodo = "Euler"
+        elif opcion == 2:
+            trayectoria = euler_mejorado(ode_expr, t0, y0, h, pasos)
+            nombre_metodo = "Euler mejorado (Heun)"
+        else:
+            trayectoria = runge_kutta_4(ode_expr, t0, y0, h, pasos)
+            nombre_metodo = "Runge-Kutta de Orden 4 (RK4)"
+    except ValueError as exc:
+        print(f"Error: {exc}")
+        return
+    print(f"\nTrayectoria ({nombre_metodo}):")
+    print("paso\t t\t y")
+    for punto in trayectoria:
+        print(f"{punto.paso}\t {_fmt6(punto.t)}\t {_fmt6(punto.y)}")
 
 
 def _ejercicio_edo() -> None:
