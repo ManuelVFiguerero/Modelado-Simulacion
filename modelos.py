@@ -514,56 +514,55 @@ def integracion_con_error_truncamiento(
     b: float,
     n: int,
     metodo: str,
-) -> tuple[float, float, float, float]:
-    """Calcula integral mejorada y estima error de truncamiento.
+    e: float,
+) -> tuple[float, float, float, bool]:
+    """Calcula integral base y estima error de truncamiento.
 
     Retorna:
-    - integral_mejorada
+    - integral_base (n original)
     - error_truncamiento_estimado
-    - integral_base (n)
-    - integral_refinada (malla refinada u orden mayor)
+    - integral_refinada (malla refinada u orden mayor, solo para estimar error)
+    - cumple_tolerancia (error_estimado <= e)
     """
+    if e <= 0:
+        raise ValueError("El parametro e debe ser mayor a cero.")
     metodo_norm = metodo.strip().lower()
 
     if metodo_norm == "trapecio":
         base = trapecio_compuesto(f_expr, a, b, n)
         refinada = trapecio_compuesto(f_expr, a, b, 2 * n)
         p = 2
-        correccion = (refinada - base) / (2**p - 1)
-        mejorada = refinada + correccion
-        return mejorada, abs(correccion), base, refinada
+        error_estimado = abs((refinada - base) / (2**p - 1))
+        return base, error_estimado, refinada, error_estimado <= e
 
     if metodo_norm == "simpson13":
         base = simpson_13_compuesto(f_expr, a, b, n)
         refinada = simpson_13_compuesto(f_expr, a, b, 2 * n)
         p = 4
-        correccion = (refinada - base) / (2**p - 1)
-        mejorada = refinada + correccion
-        return mejorada, abs(correccion), base, refinada
+        error_estimado = abs((refinada - base) / (2**p - 1))
+        return base, error_estimado, refinada, error_estimado <= e
 
     if metodo_norm == "simpson38":
         base = simpson_38_compuesto(f_expr, a, b, n)
         refinada = simpson_38_compuesto(f_expr, a, b, 2 * n)
         p = 4
-        correccion = (refinada - base) / (2**p - 1)
-        mejorada = refinada + correccion
-        return mejorada, abs(correccion), base, refinada
+        error_estimado = abs((refinada - base) / (2**p - 1))
+        return base, error_estimado, refinada, error_estimado <= e
 
     if metodo_norm == "rectangulo_medio":
         base = rectangulo_medio_compuesto(f_expr, a, b, n)
         refinada = rectangulo_medio_compuesto(f_expr, a, b, 2 * n)
         p = 2
-        correccion = (refinada - base) / (2**p - 1)
-        mejorada = refinada + correccion
-        return mejorada, abs(correccion), base, refinada
+        error_estimado = abs((refinada - base) / (2**p - 1))
+        return base, error_estimado, refinada, error_estimado <= e
 
     if metodo_norm == "gauss":
         base = cuadratura_gauss_legendre(f_expr, a, b, n)
         if n < 5:
             refinada = cuadratura_gauss_legendre(f_expr, a, b, n + 1)
             error = abs(refinada - base)
-            return refinada, error, base, refinada
-        return base, 0.0, base, base
+            return base, error, refinada, error <= e
+        return base, 0.0, base, True
 
     raise ValueError("Metodo de integracion no soportado para estimacion de error.")
 

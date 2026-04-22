@@ -11,18 +11,13 @@ from modelos import (
     aitken_desde_punto_fijo,
     aitken_delta_cuadrado,
     biseccion,
-    cuadratura_gauss_legendre,
     crecimiento_logistico,
     diferencia_central,
     integracion_con_error_truncamiento,
     interpolacion_lagrange,
     metodo_punto_fijo,
     newton_raphson,
-    rectangulo_medio_compuesto,
     runge_kutta_4,
-    simpson_13_compuesto,
-    simpson_38_compuesto,
-    trapecio_compuesto,
     verificar_lipschitz_compacto,
 )
 
@@ -36,6 +31,10 @@ def _truncar_decimales(valor: float, decimales: int = 6) -> float:
 
 def _fmt6(valor: float) -> str:
     return f"{_truncar_decimales(float(valor), 6):.6f}"
+
+
+def _fmt10(valor: float) -> str:
+    return f"{_truncar_decimales(float(valor), 10):.10f}"
 
 
 def leer_float(mensaje: str) -> float:
@@ -317,41 +316,41 @@ def ejecutar_integracion_numerica() -> None:
     a = leer_float("Limite inferior a: ")
     b = leer_float("Limite superior b: ")
     n = leer_int("Subintervalos / orden n: ", minimo=1)
+    e = leer_float("Error de truncamiento objetivo e (>0): ")
+    if e <= 0:
+        print("Error: e debe ser mayor a cero.")
+        return
+
+    metodo_mapa = {
+        1: "trapecio",
+        2: "simpson13",
+        3: "simpson38",
+        4: "rectangulo_medio",
+        5: "gauss",
+    }
 
     try:
-        if opcion == 1:
-            integral_base = trapecio_compuesto(f_expr, a, b, n)
-            integral, error_trunc, _, integral_ref = integracion_con_error_truncamiento(
-                f_expr, a, b, n, "trapecio"
+        integral_base, error_trunc, integral_ref, cumple_tolerancia = (
+            integracion_con_error_truncamiento(
+                f_expr,
+                a,
+                b,
+                n,
+                metodo_mapa[opcion],
+                e,
             )
-        elif opcion == 2:
-            integral_base = simpson_13_compuesto(f_expr, a, b, n)
-            integral, error_trunc, _, integral_ref = integracion_con_error_truncamiento(
-                f_expr, a, b, n, "simpson13"
-            )
-        elif opcion == 3:
-            integral_base = simpson_38_compuesto(f_expr, a, b, n)
-            integral, error_trunc, _, integral_ref = integracion_con_error_truncamiento(
-                f_expr, a, b, n, "simpson38"
-            )
-        elif opcion == 4:
-            integral_base = rectangulo_medio_compuesto(f_expr, a, b, n)
-            integral, error_trunc, _, integral_ref = integracion_con_error_truncamiento(
-                f_expr, a, b, n, "rectangulo_medio"
-            )
-        else:
-            integral_base = cuadratura_gauss_legendre(f_expr, a, b, n)
-            integral, error_trunc, _, integral_ref = integracion_con_error_truncamiento(
-                f_expr, a, b, n, "gauss"
-            )
+        )
     except ValueError as exc:
         print(f"Error: {exc}")
         return
 
-    print(f"\nIntegral mejorada: {_fmt6(integral)}")
-    print(f"Error de truncamiento estimado: {_fmt6(error_trunc)}")
-    print(f"Integral base: {_fmt6(integral_base)}")
-    print(f"Integral refinada: {_fmt6(integral_ref)}")
+    print(f"\nIntegral base: {_fmt10(integral_base)}")
+    print(f"Error de truncamiento estimado: {_fmt10(error_trunc)}")
+    print(f"e objetivo: {_fmt10(e)}")
+    print(f"Cumple error <= e: {'SI' if cumple_tolerancia else 'NO'}")
+    print(
+        f"Integral refinada (solo para estimar error): {_fmt10(integral_ref)}"
+    )
 
 
 _BISECCION_PRESETS = {

@@ -14,7 +14,6 @@ from modelos import (
     aitken_desde_punto_fijo,
     aitken_delta_cuadrado,
     biseccion,
-    cuadratura_gauss_legendre,
     diferencia_central,
     euler,
     euler_mejorado,
@@ -26,12 +25,8 @@ from modelos import (
     metodo_punto_fijo,
     montecarlo_call_europea_y_var,
     newton_raphson,
-    rectangulo_medio_compuesto,
     runge_kutta_4,
     set_angular_mode,
-    simpson_13_compuesto,
-    simpson_38_compuesto,
-    trapecio_compuesto,
     verificar_lipschitz_compacto,
 )
 
@@ -45,6 +40,10 @@ def _truncar_decimales(valor: float, decimales: int = 6) -> float:
 
 def _fmt6(valor: float) -> str:
     return f"{_truncar_decimales(valor, 6):.6f}"
+
+
+def _fmt10(valor: float) -> str:
+    return f"{_truncar_decimales(valor, 10):.10f}"
 
 
 def _fmt6_percent(valor: float) -> str:
@@ -229,13 +228,14 @@ def _fig_qq_normal(samples: List[float], titulo: str) -> go.Figure | None:
     return fig
 
 
-def _resolver_integracion_mejorada(
+def _resolver_integracion_con_error(
     metodo: str,
     f_expr: str,
     a: float,
     b: float,
     n: int,
-) -> tuple[float, float, float, float]:
+    e: float,
+) -> tuple[float, float, float, bool]:
     mapa = {
         "Trapecio compuesto": "trapecio",
         "Simpson 1/3 compuesto": "simpson13",
@@ -250,6 +250,7 @@ def _resolver_integracion_mejorada(
         b=float(b),
         n=int(n),
         metodo=clave,
+        e=float(e),
     )
 
 
@@ -1040,45 +1041,35 @@ def _panel_integracion() -> None:
     with col2:
         n_default = 6 if "3/8" in metodo else 4
         n = st.number_input("Subintervalos / puntos n", min_value=1, value=n_default, step=1)
+        e = st.number_input(
+            "Error de truncamiento objetivo e",
+            min_value=1e-12,
+            value=1e-6,
+            format="%.12f",
+        )
 
     if st.button("Integrar", use_container_width=True):
         try:
-            if metodo == "Trapecio compuesto":
-                integral_base = trapecio_compuesto(f_expr, a, b, int(n))
-                integral, error_trunc, _, integral_ref = integracion_con_error_truncamiento(
-                    f_expr, a, b, int(n), "trapecio"
-                )
-            elif metodo == "Simpson 1/3 compuesto":
-                integral_base = simpson_13_compuesto(f_expr, a, b, int(n))
-                integral, error_trunc, _, integral_ref = integracion_con_error_truncamiento(
-                    f_expr, a, b, int(n), "simpson13"
-                )
-            elif metodo == "Simpson 3/8 compuesto":
-                integral_base = simpson_38_compuesto(f_expr, a, b, int(n))
-                integral, error_trunc, _, integral_ref = integracion_con_error_truncamiento(
-                    f_expr, a, b, int(n), "simpson38"
-                )
-            elif metodo == "Rectangulo medio compuesto":
-                integral_base = rectangulo_medio_compuesto(f_expr, a, b, int(n))
-                integral, error_trunc, _, integral_ref = integracion_con_error_truncamiento(
-                    f_expr, a, b, int(n), "rectangulo_medio"
-                )
-            else:
-                integral_base = cuadratura_gauss_legendre(f_expr, a, b, int(n))
-                integral, error_trunc, _, integral_ref = integracion_con_error_truncamiento(
-                    f_expr, a, b, int(n), "gauss"
-                )
+            integral_base, error_trunc, integral_ref, cumple_e = _resolver_integracion_con_error(
+                metodo=metodo,
+                f_expr=f_expr,
+                a=float(a),
+                b=float(b),
+                n=int(n),
+                e=float(e),
+            )
         except ValueError as exc:
             st.error(str(exc))
             return
 
-        st.success(
-            f"Integral mejorada: {_fmt6(integral)} | "
-            f"error truncamiento estimado: {_fmt6(error_trunc)}"
+        estado = "cumple e" if cumple_e else "no cumple e"
+        st.success(f"Integral base: {_fmt10(integral_base)}")
+        st.caption(
+            f"Error truncamiento estimado={_fmt10(error_trunc)} | "
+            f"e={_fmt10(float(e))} | Estado: {estado}"
         )
         st.caption(
-            f"Base={_fmt6(integral_base)} | Refinada={_fmt6(integral_ref)} "
-            "(se usa refinamiento/Richardson para mayor precision)."
+            f"Integral refinada (solo para estimar error): {_fmt10(integral_ref)}"
         )
 
         # Visualizacion del integrando en [a,b]
@@ -1152,10 +1143,10 @@ def _panel_integracion() -> None:
                 )
             )
             fig_acc.add_hline(
-                y=integral,
+                y=integral_base,
                 line_dash="dot",
                 line_color="black",
-                annotation_text="Aprox metodo seleccionado",
+                annotation_text="Integral base (metodo seleccionado)",
             )
             fig_acc.update_layout(
                 title="Evolucion de la integral acumulada",
