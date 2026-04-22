@@ -13,6 +13,7 @@ from modelos import (
     biseccion,
     crecimiento_logistico,
     diferencia_central,
+    evaluar_expresion,
     integracion_con_error_truncamiento,
     interpolacion_lagrange,
     metodo_punto_fijo,
@@ -35,6 +36,203 @@ def _fmt6(valor: float) -> str:
 
 def _fmt10(valor: float) -> str:
     return f"{_truncar_decimales(float(valor), 10):.10f}"
+
+
+_GAUSS_LEGENDRE_TABLA_APP = {
+    2: (
+        (-0.5773502691896257, 1.0),
+        (0.5773502691896257, 1.0),
+    ),
+    3: (
+        (-0.7745966692414834, 0.5555555555555556),
+        (0.0, 0.8888888888888888),
+        (0.7745966692414834, 0.5555555555555556),
+    ),
+    4: (
+        (-0.8611363115940526, 0.34785484513745385),
+        (-0.33998104358485626, 0.6521451548625461),
+        (0.33998104358485626, 0.6521451548625461),
+        (0.8611363115940526, 0.34785484513745385),
+    ),
+    5: (
+        (-0.906179845938664, 0.23692688505618908),
+        (-0.5384693101056831, 0.47862867049936647),
+        (0.0, 0.5688888888888889),
+        (0.5384693101056831, 0.47862867049936647),
+        (0.906179845938664, 0.23692688505618908),
+    ),
+}
+
+
+def _cell_str(valor: object) -> str:
+    if isinstance(valor, float):
+        return _fmt10(valor)
+    return str(valor)
+
+
+def _imprimir_tabla(columnas: List[str], filas: List[dict]) -> None:
+    if not filas:
+        print("(sin filas para mostrar)")
+        return
+
+    matriz = [[_cell_str(fila.get(col, "")) for col in columnas] for fila in filas]
+    anchos = [len(col) for col in columnas]
+    for fila in matriz:
+        for i, celda in enumerate(fila):
+            anchos[i] = max(anchos[i], len(celda))
+
+    encabezado = " | ".join(col.ljust(anchos[i]) for i, col in enumerate(columnas))
+    separador = "-+-".join("-" * anchos[i] for i in range(len(columnas)))
+    print(encabezado)
+    print(separador)
+    for fila in matriz:
+        print(" | ".join(celda.rjust(anchos[i]) for i, celda in enumerate(fila)))
+
+
+def _tabla_detalle_integracion(
+    opcion: int, f_expr: str, a: float, b: float, n: int
+) -> tuple[str, List[str], List[dict]]:
+    if a >= b:
+        raise ValueError("El intervalo debe cumplir a < b.")
+    if n < 1:
+        raise ValueError("n debe ser mayor o igual a 1.")
+
+    if opcion == 1:
+        h = (b - a) / n
+        filas: List[dict] = []
+        for i in range(n + 1):
+            x_i = a + i * h
+            fx = evaluar_expresion(f_expr, x=x_i)
+            peso = 0.5 if i in (0, n) else 1.0
+            aporte = h * peso * fx
+            filas.append(
+                {"i": i, "x_i": x_i, "f(x_i)": fx, "peso": peso, "aporte": aporte}
+            )
+        return "Trapecio compuesto", ["i", "x_i", "f(x_i)", "peso", "aporte"], filas
+
+    if opcion == 2:
+        if n < 2 or n % 2 != 0:
+            raise ValueError("Para Simpson 1/3, n debe ser par y >= 2.")
+        h = (b - a) / n
+        filas = []
+        for i in range(n + 1):
+            x_i = a + i * h
+            fx = evaluar_expresion(f_expr, x=x_i)
+            coef = 1 if i in (0, n) else (4 if i % 2 == 1 else 2)
+            aporte = (h / 3.0) * coef * fx
+            filas.append(
+                {"i": i, "x_i": x_i, "f(x_i)": fx, "coef": coef, "aporte": aporte}
+            )
+        return "Simpson 1/3 compuesto", ["i", "x_i", "f(x_i)", "coef", "aporte"], filas
+
+    if opcion == 3:
+        if n < 3 or n % 3 != 0:
+            raise ValueError("Para Simpson 3/8, n debe ser multiplo de 3 y >= 3.")
+        h = (b - a) / n
+        filas = []
+        for i in range(n + 1):
+            x_i = a + i * h
+            fx = evaluar_expresion(f_expr, x=x_i)
+            coef = 1 if i in (0, n) else (2 if i % 3 == 0 else 3)
+            aporte = (3.0 * h / 8.0) * coef * fx
+            filas.append(
+                {"i": i, "x_i": x_i, "f(x_i)": fx, "coef": coef, "aporte": aporte}
+            )
+        return "Simpson 3/8 compuesto", ["i", "x_i", "f(x_i)", "coef", "aporte"], filas
+
+    if opcion == 4:
+        h = (b - a) / n
+        filas = []
+        for i in range(n):
+            x_i = a + i * h
+            x_ip1 = x_i + h
+            x_medio = x_i + 0.5 * h
+            fx = evaluar_expresion(f_expr, x=x_medio)
+            aporte = h * fx
+            filas.append(
+                {
+                    "i": i,
+                    "x_i": x_i,
+                    "x_(i+1)": x_ip1,
+                    "x_medio": x_medio,
+                    "f(x_medio)": fx,
+                    "aporte": aporte,
+                }
+            )
+        return (
+            "Rectangulo medio compuesto",
+            ["i", "x_i", "x_(i+1)", "x_medio", "f(x_medio)", "aporte"],
+            filas,
+        )
+
+    if opcion == 5:
+        if n not in _GAUSS_LEGENDRE_TABLA_APP:
+            raise ValueError("Para Gauss-Legendre, n (orden) debe ser 2, 3, 4 o 5.")
+        c1 = (b - a) / 2.0
+        c2 = (a + b) / 2.0
+        filas = []
+        for j, (xi_ref, wi) in enumerate(_GAUSS_LEGENDRE_TABLA_APP[n], start=1):
+            x_i = c1 * xi_ref + c2
+            fx = evaluar_expresion(f_expr, x=x_i)
+            aporte = c1 * wi * fx
+            filas.append(
+                {
+                    "j": j,
+                    "xi_ref": xi_ref,
+                    "w_i": wi,
+                    "x_i": x_i,
+                    "f(x_i)": fx,
+                    "aporte": aporte,
+                }
+            )
+        return (
+            "Cuadratura de Gauss-Legendre",
+            ["j", "xi_ref", "w_i", "x_i", "f(x_i)", "aporte"],
+            filas,
+        )
+
+    raise ValueError("Metodo de integracion invalido.")
+
+
+def _mostrar_resultado_integracion(
+    opcion: int, f_expr: str, a: float, b: float, n: int, e: float, mostrar_tabla: bool
+) -> None:
+    if e <= 0:
+        raise ValueError("e debe ser mayor a cero.")
+    metodo_mapa = {
+        1: "trapecio",
+        2: "simpson13",
+        3: "simpson38",
+        4: "rectangulo_medio",
+        5: "gauss",
+    }
+    if opcion not in metodo_mapa:
+        raise ValueError("Metodo de integracion invalido.")
+
+    integral_base, error_trunc, integral_ref, cumple_tolerancia = (
+        integracion_con_error_truncamiento(
+            f_expr,
+            a,
+            b,
+            n,
+            metodo_mapa[opcion],
+            e,
+        )
+    )
+    print(f"\nIntegral base: {_fmt10(integral_base)}")
+    print(f"Error de truncamiento estimado: {_fmt10(error_trunc)}")
+    print(f"e objetivo: {_fmt10(e)}")
+    print(f"Cumple error <= e: {'SI' if cumple_tolerancia else 'NO'}")
+    print(
+        f"Integral refinada (solo para estimar error): {_fmt10(integral_ref)}"
+    )
+
+    if not mostrar_tabla:
+        return
+
+    nombre, columnas, filas = _tabla_detalle_integracion(opcion, f_expr, a, b, n)
+    print(f"\nTabla de aportes - {nombre}:")
+    _imprimir_tabla(columnas, filas)
 
 
 def leer_float(mensaje: str) -> float:
@@ -317,41 +515,24 @@ def ejecutar_integracion_numerica() -> None:
     b = leer_float("Limite superior b: ")
     n = leer_int("Subintervalos / orden n: ", minimo=1)
     e = leer_float("Error de truncamiento objetivo e (>0): ")
-    if e <= 0:
-        print("Error: e debe ser mayor a cero.")
-        return
-
-    metodo_mapa = {
-        1: "trapecio",
-        2: "simpson13",
-        3: "simpson38",
-        4: "rectangulo_medio",
-        5: "gauss",
-    }
+    mostrar_tabla_txt = input(
+        "Mostrar tabla detallada de integracion? [S/n]: "
+    ).strip().lower()
+    mostrar_tabla = mostrar_tabla_txt in ("", "s", "si", "y", "yes")
 
     try:
-        integral_base, error_trunc, integral_ref, cumple_tolerancia = (
-            integracion_con_error_truncamiento(
-                f_expr,
-                a,
-                b,
-                n,
-                metodo_mapa[opcion],
-                e,
-            )
+        _mostrar_resultado_integracion(
+            opcion=opcion,
+            f_expr=f_expr,
+            a=a,
+            b=b,
+            n=n,
+            e=e,
+            mostrar_tabla=mostrar_tabla,
         )
     except ValueError as exc:
         print(f"Error: {exc}")
         return
-
-    print(f"\nIntegral base: {_fmt10(integral_base)}")
-    print(f"Error de truncamiento estimado: {_fmt10(error_trunc)}")
-    print(f"e objetivo: {_fmt10(e)}")
-    print(f"Cumple error <= e: {'SI' if cumple_tolerancia else 'NO'}")
-    print(
-        f"Integral refinada (solo para estimar error): {_fmt10(integral_ref)}"
-    )
-
 
 _BISECCION_PRESETS = {
     1: ("sqrt(x) - cos(x) = 0 en [0,1]", "sqrt(x) - cos(x)", 0.0, 1.0, 1e-3, 100),
@@ -421,6 +602,46 @@ _RK4_PRESETS = {
     4: ("y'=t-y**2, y(0)=1, h=0.2, 0<=t<=2", "t - y**2", 0.0, 1.0, 0.2, 10),
     5: ("y'=exp(-t)-y, y(0)=0, h=0.1, 0<=t<=1", "exp(-t) - y", 0.0, 0.0, 0.1, 10),
     6: ("y'=1/(1+t**2)-y, y(0)=1, h=0.5, 0<=t<=2", "1/(1+t**2) - y", 0.0, 1.0, 0.5, 4),
+}
+
+_INTEGRACION_PRESETS = {
+    1: ("Trapecio: sin(x) en [0,pi], n=8", 1, "sin(x)", 0.0, math.pi, 8, 1e-5),
+    2: (
+        "Simpson 1/3: exp(-x**2) en [0,1], n=10",
+        2,
+        "exp(-x**2)",
+        0.0,
+        1.0,
+        10,
+        1e-6,
+    ),
+    3: (
+        "Simpson 3/8: x**3 + 2*x en [0,1], n=6",
+        3,
+        "x**3 + 2*x",
+        0.0,
+        1.0,
+        6,
+        1e-8,
+    ),
+    4: (
+        "Rectangulo medio: log(x+1) en [0,1], n=8",
+        4,
+        "log(x+1)",
+        0.0,
+        1.0,
+        8,
+        1e-5,
+    ),
+    5: (
+        "Gauss-Legendre: exp(-x**2) en [0,1], orden=3",
+        5,
+        "exp(-x**2)",
+        0.0,
+        1.0,
+        3,
+        1e-6,
+    ),
 }
 
 
@@ -647,6 +868,40 @@ def _ejercicio_edo() -> None:
         print(f"{punto.paso}\t {_fmt6(punto.t)}\t {_fmt6(punto.y)}")
 
 
+def _ejercicio_integracion() -> None:
+    seleccionado = _elegir_preset(
+        "Ejercicios PDF - Integracion Numerica", _INTEGRACION_PRESETS
+    )
+    if seleccionado is None:
+        return
+
+    (
+        _,
+        opcion_metodo,
+        f_expr,
+        a,
+        b,
+        n_default,
+        e_default,
+    ) = seleccionado
+    n = leer_int_opcional(f"Subintervalos / orden n (Enter={n_default}): ", n_default)
+    e = leer_float_opcional(f"Error objetivo e (Enter={e_default}): ", e_default)
+
+    try:
+        _mostrar_resultado_integracion(
+            opcion=opcion_metodo,
+            f_expr=f_expr,
+            a=a,
+            b=b,
+            n=n,
+            e=e,
+            mostrar_tabla=True,
+        )
+    except ValueError as exc:
+        print(f"Error: {exc}")
+        return
+
+
 def ejecutar_ejercicios_pdf() -> None:
     while True:
         print("\n==============================")
@@ -659,6 +914,7 @@ def ejecutar_ejercicios_pdf() -> None:
         print("5) Lagrange")
         print("6) Diferencias Finitas")
         print("7) EDO (Euler, Euler mejorado y RK4)")
+        print("8) Integracion numerica (con tabla)")
         print("0) Volver")
         opcion = input("Selecciona una opcion: ").strip()
 
@@ -676,6 +932,8 @@ def ejecutar_ejercicios_pdf() -> None:
             _ejercicio_diferencias()
         elif opcion == "7":
             _ejercicio_edo()
+        elif opcion == "8":
+            _ejercicio_integracion()
         elif opcion == "0":
             return
         else:

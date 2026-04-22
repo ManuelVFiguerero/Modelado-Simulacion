@@ -112,6 +112,7 @@ Incluye presets para:
 - Integracion numerica para ejercicios de Newton-Cotes y Gauss.
   Incluye estimacion de error de truncamiento con parametro `e` y reporte de
   cumplimiento `error <= e`, manteniendo como salida principal la integral base.
+  Ahora tambien muestra **tablas de aportes** por metodo en modo guiado.
 
 Esto permite elegir un ejercicio y cambiar solo tolerancia/iteraciones cuando haga falta.
 
@@ -123,6 +124,11 @@ Esto permite elegir un ejercicio y cambiar solo tolerancia/iteraciones cuando ha
   - Raices e interpolacion: `x`
   - EDO (Euler/Euler mejorado/RK4): `t` y `y`
 - En Lagrange, los valores de `x` de los puntos deben ser distintos.
+- En integracion numerica (CLI), podes activar la tabla detallada para ver:
+  - nodos/subintervalos,
+  - evaluaciones `f(x)`,
+  - coeficientes/pesos,
+  - aporte parcial de cada termino.
 - En **Aitken desde punto fijo**, se solicita un compacto `[a,b]` y se valida:
   - autocontencion `g([a,b]) subset [a,b]`,
   - cota Lipschitz estimada `L < 1` (contraccion).
