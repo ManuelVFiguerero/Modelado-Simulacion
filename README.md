@@ -46,7 +46,9 @@ python3 app.py
 
 ## Version web interactiva (con graficos)
 
-Tambien podes usar una interfaz web con graficos interactivos (HTML) usando Streamlit + Plotly:
+Tambien podes usar una interfaz web con graficos interactivos (HTML) usando Streamlit + Plotly.
+Para mejorar la calidad visual se usa la API avanzada de **Plotly Graph Objects**
+(capas multiples, `Scattergl` para alto volumen, histogramas de densidad y overlays estadisticos):
 
 ```bash
 python3 -m venv .venv
@@ -57,14 +59,17 @@ python -m streamlit run web_app.py
 
 La web incluye:
 - graficos de convergencia por iteracion (Biseccion, Punto Fijo, Newton, Aitken),
-- curva de la funcion en intervalos configurables,
-- interpolacion de Lagrange con nodos + curva interpolante,
-- trayectoria de EDO con Euler, Euler mejorado o RK4, y modelo logistico,
-- comparacion visual de metodos de integracion numerica,
+- curvas de error relativo, residuos y trayectoria de iteraciones en los metodos de raices,
+- curva de la funcion en intervalos configurables y visualizaciones adicionales por metodo,
+- interpolacion de Lagrange con nodos, curva interpolante y aportes por nodo,
+- trayectoria de EDO con Euler, Euler mejorado o RK4 + comparativa entre los 3 metodos,
+- comparacion visual de metodos de integracion numerica + integral acumulada,
 - paneles de **Monte Carlo** para:
   - integral simple,
   - integral doble en rectangulos,
   - aplicacion a trading (precio de call europea y VaR),
+- en Monte Carlo: histogramas con forma de **campana** (curva normal ajustada),
+  media acumulada, dispersion 2D y colas de riesgo para trading,
 - pagina "Chuleta / Atajos" con expresiones listas para copiar y pegar,
 - selector global de modo angular (**Radianes** o **Grados**) para funciones trigonometricas.
 
